@@ -47,7 +47,7 @@ export function JobCardTitleTip({
     >
       <Link
         to={`/jobs/${job.id}`}
-        className="block truncate text-sm text-office-text hover:text-gemini-700 dark:hover:text-gemini-300"
+        className="block truncate text-xs text-office-text hover:text-gemini-700 dark:hover:text-gemini-300"
         title={title}
       >
         {title}

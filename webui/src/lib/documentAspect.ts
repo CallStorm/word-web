@@ -13,4 +13,4 @@ export const JOB_CARD_CLASS =
   'group relative overflow-hidden rounded-sm bg-office-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_2px_8px_rgba(0,0,0,0.1)] dark:bg-[#292827]'
 
 export const JOB_CARD_FOOTER_CLASS =
-  'flex items-center gap-2 border-t border-office-border/50 px-2.5 py-1.5'
+  'flex items-center gap-1.5 border-t border-office-border/50 px-2 py-1'

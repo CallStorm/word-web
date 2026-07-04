@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
@@ -10,7 +10,6 @@ import type {
   RevisionRequest,
 } from '../api/types'
 import { notifyError, notifySuccess } from '../stores/toastStore'
-import { EditPageHeader } from '../components/edit/EditModeTabs'
 import { DocumentReviewLayout } from '../components/edit/DocumentReviewLayout'
 import { buildGlobalRevisionPayload } from '../components/edit/GlobalEditPanel'
 import { EditSubmitFooter } from '../components/edit/EditSubmitFooter'
@@ -73,6 +72,14 @@ export function EditJobPage() {
 
   const canSubmit = isEditable && confirmed && !submitting && hasRevisionContent
 
+  useEffect(() => {
+    const prev = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    return () => {
+      document.documentElement.style.overflow = prev
+    }
+  }, [])
+
   const handleSubmit = async () => {
     if (!jobId) return
     if (!confirmed) {
@@ -107,26 +114,27 @@ export function EditJobPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-4 p-4 sm:p-6">
-      <EditPageHeader jobId={jobId ?? ''} />
-
+    <div
+      className="fixed inset-x-0 bottom-0 z-0 flex flex-col overflow-hidden bg-office-bg dark:bg-[#1b1a19]"
+      style={{ top: 'var(--app-header-height)' }}
+    >
       {targetsQ.isLoading ? (
-        <div className="rounded-lg border border-slate-200 p-8 text-center text-slate-500 dark:border-slate-700">
+        <div className="flex flex-1 items-center justify-center text-slate-500">
           加载中…
         </div>
       ) : targetsQ.error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        <div className="m-4 rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
           无法加载文档：{String(targetsQ.error)}
         </div>
       ) : !isEditable ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        <div className="m-4 rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
           <h2 className="text-base font-medium">该任务暂不可编辑</h2>
           <p className="mt-1 text-sm">{reason ?? '请确认任务状态为已完成'}</p>
         </div>
       ) : (
         <>
           {reason && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
               {reason}
             </div>
           )}

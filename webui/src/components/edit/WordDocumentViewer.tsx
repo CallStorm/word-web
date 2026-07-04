@@ -79,6 +79,19 @@ export const WordDocumentViewer = forwardRef<
     return iframeRef.current?.contentDocument ?? null
   }, [])
 
+  const syncIframeHeight = useCallback(() => {
+    const doc = getDoc()
+    const iframe = iframeRef.current
+    if (!doc || !iframe) return
+    const height = Math.max(
+      doc.documentElement.scrollHeight,
+      doc.body?.scrollHeight ?? 0,
+      doc.documentElement.offsetHeight,
+      doc.body?.offsetHeight ?? 0,
+    )
+    iframe.style.height = `${height}px`
+  }, [getDoc])
+
   useImperativeHandle(ref, () => ({
     startEdit(ann: PageAnnotation) {
       setPending({
@@ -112,6 +125,8 @@ export const WordDocumentViewer = forwardRef<
     const doc = getDoc()
     const iframe = iframeRef.current
     if (!doc || !iframe) return
+
+    syncIframeHeight()
 
     const onMouseUp = () => {
       const anchor = selectionAnchor(doc)
@@ -160,7 +175,7 @@ export const WordDocumentViewer = forwardRef<
       cleanupPageObserver()
       cleanupHeadingObserver()
     }
-  }, [loaded, getDoc, onPageChange, onActiveDataPathChange, onSelectAnnotation, outlineHeadings, zoom])
+  }, [loaded, getDoc, onPageChange, onActiveDataPathChange, onSelectAnnotation, outlineHeadings, syncIframeHeight, zoom])
 
   useEffect(() => {
     const doc = getDoc()
@@ -226,15 +241,15 @@ export const WordDocumentViewer = forwardRef<
 
   if (!documentHtmlUrl) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-slate-100 p-8 text-sm text-slate-500 dark:bg-slate-800/60">
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-slate-100 p-8 text-sm text-slate-500 dark:bg-slate-800/60">
         文档预览生成中，可在右侧填写文字修改意见
       </div>
     )
   }
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col bg-slate-100 dark:bg-slate-800/60">
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-slate-700">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-slate-100 dark:bg-slate-800/60">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-slate-700">
         <span>{loaded ? '选中文字后点击「添加批注」' : '加载文档…'}</span>
         <div className="flex items-center gap-1">
           <button
@@ -266,7 +281,7 @@ export const WordDocumentViewer = forwardRef<
             ref={iframeRef}
             src={documentHtmlUrl}
             title="文档预览"
-            className="min-h-[calc(100vh-14rem)] w-full border-0 bg-transparent"
+            className="w-full border-0 bg-transparent"
             onLoad={() => setLoaded(true)}
           />
         </div>

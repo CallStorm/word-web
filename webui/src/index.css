@@ -32,6 +32,10 @@ body {
   @apply bg-office-bg text-office-text antialiased dark:bg-[#1b1a19] dark:text-[#fafafa];
 }
 
+:root {
+  --app-header-height: calc(3.5rem + 0.125rem);
+}
+
 /* Shared Word-style app chrome (header ribbon). */
 .app-chrome {
   @apply border-b border-office-border bg-office-surface shadow-sm dark:border-[#3b3a39] dark:bg-[#292827];

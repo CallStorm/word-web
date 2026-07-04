@@ -1,6 +1,5 @@
 import type {
   ContentPreset,
-  EditTargetSlide,
   GlobalRevision,
   GlobalRevisionKind,
 } from '../../api/types'
@@ -35,7 +34,6 @@ export function buildGlobalRevisionPayload(
 }
 
 export function GlobalEditPanel({
-  slides,
   kind,
   onKindChange,
   contentPreset,
@@ -45,7 +43,6 @@ export function GlobalEditPanel({
   customComment,
   onCustomCommentChange,
 }: {
-  slides: EditTargetSlide[]
   kind: GlobalRevisionKind
   onKindChange: (k: GlobalRevisionKind) => void
   contentPreset: ContentPreset | null
@@ -111,10 +108,6 @@ export function GlobalEditPanel({
           />
         )}
       </div>
-
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        影响范围：全部 {slides.length} 页
-      </p>
     </div>
   )
 }

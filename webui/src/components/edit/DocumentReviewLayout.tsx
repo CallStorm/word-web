@@ -63,7 +63,6 @@ function ReviewCommentPanel({
   pageIndex,
   pageAnnotations,
   activeAnnotationId,
-  slides,
   onSelectAnnotation,
   onEditAnnotation,
   onDeleteAnnotation,
@@ -79,7 +78,6 @@ function ReviewCommentPanel({
   pageIndex: number
   pageAnnotations: PageAnnotation[]
   activeAnnotationId: string | null
-  slides: EditTargetSlide[]
   onSelectAnnotation: (id: string | null) => void
   onEditAnnotation: (ann: PageAnnotation) => void
   onDeleteAnnotation: (id: string) => void
@@ -101,7 +99,7 @@ function ReviewCommentPanel({
   )
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+    <aside className="flex min-h-0 w-[360px] shrink-0 flex-col border-l border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 dark:border-slate-700">
         审阅与修改
       </div>
@@ -138,7 +136,6 @@ function ReviewCommentPanel({
           <section className="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700">
             <p className="text-xs font-medium text-slate-500">全局修改（可选，可与批注一并提交）</p>
             <GlobalEditPanel
-              slides={slides}
               kind={globalKind}
               onKindChange={onGlobalKindChange}
               contentPreset={contentPreset}
@@ -254,7 +251,7 @@ export function DocumentReviewLayout({
   }, [])
 
   return (
-    <div className="flex min-h-[calc(100vh-12rem)] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       <DocumentOutlineSidebar
         headings={documentOutline}
         slides={slides}
@@ -280,7 +277,6 @@ export function DocumentReviewLayout({
         pageIndex={pageIndex}
         pageAnnotations={annotations}
         activeAnnotationId={activeAnnotationId}
-        slides={slides}
         onSelectAnnotation={handleSelectAnnotation}
         onEditAnnotation={(ann) => viewerRef.current?.startEdit(ann)}
         onDeleteAnnotation={deleteAnnotation}

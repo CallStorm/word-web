@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export function EditSubmitFooter({
   annotationCount,
   hasGlobalRevision,
@@ -25,8 +27,8 @@ export function EditSubmitFooter({
   const summary = summaryParts.length > 0 ? summaryParts.join(' · ') : '请添加批注或全局修改'
 
   return (
-    <footer className="sticky bottom-0 -mx-6 mt-2 border-t border-slate-200 bg-white/90 px-6 py-4 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+    <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <input
             type="checkbox"
@@ -48,6 +50,16 @@ export function EditSubmitFooter({
           >
             {submitting ? '提交中…' : '提交修改'}
           </button>
+          <Link
+            to="/"
+            replace
+            aria-disabled={submitting}
+            className={`rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 ${
+              submitting ? 'pointer-events-none opacity-50' : ''
+            }`}
+          >
+            取消
+          </Link>
         </div>
       </div>
     </footer>
