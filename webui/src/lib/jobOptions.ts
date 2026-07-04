@@ -33,6 +33,7 @@ export interface JobOptions {
   core_topic: string | null
   outline: string[] | null
   template_data?: Record<string, string> | null
+  generation_hint?: string | null
 }
 
 export interface OptionItem<T extends string = string> {

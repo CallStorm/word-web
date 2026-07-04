@@ -71,6 +71,7 @@ async def create_job(
     core_topic: Annotated[str | None, Form()] = None,
     outline: Annotated[str, Form()] = "",
     template_data: Annotated[str, Form()] = "",
+    generation_hint: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],
 ) -> dict:
     outline_list = [s.strip() for s in outline.split("\n") if s.strip()] if outline else None
@@ -103,6 +104,7 @@ async def create_job(
             core_topic=core_topic,
             outline=outline_list,
             template_data=parsed_template_data,
+            generation_hint=generation_hint.strip() or None,
         )
     except ValidationError as e:
         raise HTTPException(422, detail=e.errors()) from e

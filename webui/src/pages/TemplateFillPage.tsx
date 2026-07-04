@@ -7,12 +7,24 @@ import { useAuthStore } from '../stores/authStore'
 import { notifyError, notifySuccess } from '../stores/toastStore'
 import { invalidateJobLists } from '../hooks/useJobs'
 import { FileUploadZone } from '../components/jobs/FileUploadZone'
+import { TemplateAiFillButton } from '../components/templates/TemplateAiFillButton'
 import { TemplateGallery } from '../components/templates/TemplateGallery'
 import { useTemplate } from '../hooks/useTemplates'
-import { parseOutlineLines } from '../lib/jobOptions'
+import { mergeTemplateSlotValues } from '../lib/templateAiFill'
 
 const PANEL_CLASS =
   'rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/40'
+
+function buildPromptFallback(
+  extraPrompt: string,
+  sourceText: string,
+  slots: TemplateSlot[],
+  slotValues: Record<string, string>,
+): string {
+  if (extraPrompt.trim()) return extraPrompt.trim()
+  if (sourceText.trim()) return sourceText.trim()
+  return slots.map((s) => `${s.label}: ${slotValues[s.key] ?? ''}`).join('\n')
+}
 
 export function TemplateFillPage() {
   const quota = useAuthStore((s) => s.quota)
@@ -22,14 +34,16 @@ export function TemplateFillPage() {
 
   const [projectName, setProjectName] = useState('')
   const [templateId, setTemplateId] = useState<string | null>(searchParams.get('templateId'))
-  const [coreTopic, setCoreTopic] = useState('')
-  const [outlineText, setOutlineText] = useState('')
+  const [sourceText, setSourceText] = useState('')
+  const [extraPrompt, setExtraPrompt] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [slotValues, setSlotValues] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [planConfirmed, setPlanConfirmed] = useState(false)
 
   const templateQ = useTemplate(templateId ?? undefined)
+  const templateName = templateQ.data?.name ?? '模板'
+
   const slots: TemplateSlot[] = useMemo(() => {
     const t = templateQ.data
     if (!t) return []
@@ -54,34 +68,29 @@ export function TemplateFillPage() {
 
   useEffect(() => {
     setSlotValues({})
+    setSourceText('')
+    setExtraPrompt('')
     setPlanConfirmed(false)
   }, [templateId])
 
-  const requiredFilled =
-    slots.length === 0 ||
-    slots.every((s) => (slotValues[s.key] ?? '').trim().length > 0)
-
-  const canStart = useMemo(
-    () =>
-      quota() > 0 &&
-      !!templateId &&
-      (!!coreTopic.trim() || requiredFilled) &&
-      planConfirmed &&
-      !submitting,
-    [quota, templateId, coreTopic, requiredFilled, planConfirmed, submitting],
+  const filledCount = useMemo(
+    () => Object.values(slotValues).filter((v) => v.trim()).length,
+    [slotValues],
   )
 
-  const applyOutlineToSlots = () => {
-    const lines = parseOutlineLines(outlineText)
-    if (lines.length === 0 || slots.length === 0) return
-    const next = { ...slotValues }
-    slots.forEach((slot, i) => {
-      if (lines[i] && !next[slot.key]?.trim()) {
-        next[slot.key] = lines[i]
-      }
-    })
-    setSlotValues(next)
-    notifySuccess('已从大纲填充部分变量')
+  const hasContent = useMemo(() => {
+    if (slots.length === 0) return !!sourceText.trim() || !!extraPrompt.trim()
+    return filledCount > 0 || !!extraPrompt.trim()
+  }, [slots.length, filledCount, extraPrompt, sourceText])
+
+  const canStart = useMemo(
+    () => quota() > 0 && !!templateId && hasContent && planConfirmed && !submitting,
+    [quota, templateId, hasContent, planConfirmed, submitting],
+  )
+
+  const applyAiFill = (data: Record<string, string>) => {
+    setSlotValues((prev) => mergeTemplateSlotValues(prev, data))
+    setPlanConfirmed(false)
   }
 
   const submit = async () => {
@@ -89,15 +98,14 @@ export function TemplateFillPage() {
     setSubmitting(true)
     try {
       const fd = new FormData()
-      const prompt =
-        coreTopic.trim() ||
-        slots.map((s) => `${s.label}: ${slotValues[s.key] ?? ''}`).join('\n')
+      const prompt = buildPromptFallback(extraPrompt, sourceText, slots, slotValues)
       fd.append('prompt', prompt)
       if (projectName.trim()) fd.append('project_name', projectName.trim())
       fd.append('generation_mode', 'template')
       fd.append('template_id', templateId)
-      fd.append('core_topic', coreTopic.trim() || prompt.slice(0, 500))
-      if (outlineText.trim()) fd.append('outline', outlineText)
+      if (sourceText.trim()) fd.append('core_topic', sourceText.trim().slice(0, 2000))
+      if (extraPrompt.trim()) fd.append('generation_hint', extraPrompt.trim())
+
       const templateData: Record<string, string> = {}
       for (const slot of slots) {
         const val = (slotValues[slot.key] ?? '').trim()
@@ -107,6 +115,7 @@ export function TemplateFillPage() {
         fd.append('template_data', JSON.stringify(templateData))
       }
       for (const f of files) fd.append('files', f, f.name)
+
       const job = await api<{ id: string }>('POST', '/api/jobs', fd)
       notifySuccess('已开始填充模板，请稍候…')
       invalidateJobLists(qc)
@@ -118,15 +127,13 @@ export function TemplateFillPage() {
     }
   }
 
-  const outlineLines = parseOutlineLines(outlineText)
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">模板填充</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            选择模板、填写变量，系统将按占位符合并生成文档。
+            选择模板，提供素材后 AI 自动填入变量，确认后生成文档。
           </p>
         </div>
         <Link to="/" className="text-sm text-slate-500 hover:text-gemini-600">
@@ -155,22 +162,59 @@ export function TemplateFillPage() {
           </p>
         </section>
 
-        {templateId && slots.length > 0 && (
+        {templateId && (
           <section className={PANEL_CLASS}>
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                ② 填写变量（{slots.length} 个）
-              </h2>
-              {outlineLines.length > 0 && (
-                <button
-                  type="button"
-                  onClick={applyOutlineToSlots}
-                  className="text-xs text-gemini-600 hover:underline"
-                >
-                  从大纲填充
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200">② 提供素材</h2>
+              {slots.length > 0 && (
+                <TemplateAiFillButton
+                  sourceText={sourceText}
+                  files={files}
+                  templateName={templateName}
+                  slots={slots}
+                  disabled={!sourceText.trim() && files.length === 0}
+                  onResult={(data) => applyAiFill(data.template_data)}
+                />
               )}
             </div>
+            <div className="mt-3 space-y-3">
+              <label className="block">
+                <span className="text-xs text-slate-500">项目名称（可选）</span>
+                <input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  placeholder="例：2026 年度合同"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs text-slate-500">相关信息</span>
+                <textarea
+                  value={sourceText}
+                  onChange={(e) => {
+                    setSourceText(e.target.value)
+                    setPlanConfirmed(false)
+                  }}
+                  rows={5}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  placeholder="粘贴或描述要写入模板的内容，例如合同双方、金额、条款要点，或报告各章节要点。"
+                />
+              </label>
+
+              <FileUploadZone files={files} onChange={setFiles} />
+            </div>
+          </section>
+        )}
+
+        {templateId && slots.length > 0 && (
+          <section className={PANEL_CLASS}>
+            <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              ③ 模板变量（{filledCount}/{slots.length} 已填）
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              AI 填充后可手动修改；未填变量可在生成时由 AI 根据素材补充。
+            </p>
             <div className="mt-3 space-y-3">
               {slots.map((slot) => (
                 <label key={slot.key} className="block">
@@ -196,92 +240,64 @@ export function TemplateFillPage() {
           </section>
         )}
 
-        <section className={PANEL_CLASS}>
-          <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            {slots.length > 0 ? '③ 补充说明（可选）' : '② 填充内容'}
-          </h2>
-          <div className="mt-3 space-y-3">
-            <label className="block">
-              <span className="text-xs text-slate-500">项目名称（可选）</span>
-              <input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-                placeholder="例：2026 年度合同"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs text-slate-500">
-                内容说明 {slots.length === 0 && <span className="text-rose-500">*</span>}
-              </span>
+        {templateId && (
+          <section className={PANEL_CLASS}>
+            <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              {slots.length > 0 ? '④ 生成微调（可选）' : '③ 生成微调（可选）'}
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              提交生成时的额外说明，不影响上方 AI 填充，例如语气、格式或需强调的内容。
+            </p>
+            <label className="mt-3 block">
+              <span className="text-xs text-slate-500">额外提示词</span>
               <textarea
-                value={coreTopic}
+                value={extraPrompt}
                 onChange={(e) => {
-                  setCoreTopic(e.target.value)
+                  setExtraPrompt(e.target.value)
                   setPlanConfirmed(false)
                 }}
-                rows={5}
+                rows={3}
                 className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-                placeholder={
-                  slots.length > 0
-                    ? '可选：描述未填变量或整体背景，AI 将补充缺失字段。'
-                    : '描述要写入模板的信息。'
-                }
+                placeholder="例：语气更正式；金额保留两位小数；缺失字段从附件中推断。"
               />
             </label>
-
-            <FileUploadZone files={files} onChange={setFiles} />
-
-            <label className="block">
-              <span className="text-xs text-slate-500">章节/字段大纲（可选，每行一条）</span>
-              <textarea
-                value={outlineText}
-                onChange={(e) => {
-                  setOutlineText(e.target.value)
-                  setPlanConfirmed(false)
-                }}
-                rows={4}
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800"
-                placeholder={'甲方信息\n乙方信息\n合同金额\n交付条款'}
-              />
-            </label>
-          </div>
-        </section>
+          </section>
+        )}
 
         {quota() <= 0 && (
           <p className="text-sm text-rose-600">Credits 不足，无法创建任务</p>
         )}
 
-        <section className="rounded-xl border-2 border-gemini-200 bg-gemini-50/40 p-4 shadow-sm dark:border-gemini-800 dark:bg-gemini-950/30">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            {slots.length > 0 ? '④ 确认并提交' : '③ 确认并提交'}
-          </h2>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            模板填充 · {templateId ? '已选模板' : '未选模板'}
-            {slots.length > 0 && ` · 已填 ${Object.values(slotValues).filter((v) => v.trim()).length}/${slots.length} 变量`}
-            {outlineLines.length > 0 && ` · 大纲 ${outlineLines.length} 条`}
-          </p>
+        {templateId && (
+          <section className="rounded-xl border-2 border-gemini-200 bg-gemini-50/40 p-4 shadow-sm dark:border-gemini-800 dark:bg-gemini-950/30">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {slots.length > 0 ? '⑤ 确认并提交' : '④ 确认并提交'}
+            </h2>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              模板填充 · {templateName}
+              {slots.length > 0 && ` · 已填 ${filledCount}/${slots.length} 变量`}
+            </p>
 
-          <label className="mt-4 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={planConfirmed}
-              onChange={(e) => setPlanConfirmed(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-gemini-600 focus:ring-gemini-500"
-            />
-            <span>我已确认模板与内容无误，开始后将合并变量生成文档。</span>
-          </label>
+            <label className="mt-4 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={planConfirmed}
+                onChange={(e) => setPlanConfirmed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-gemini-600 focus:ring-gemini-500"
+              />
+              <span>我已确认模板与变量无误，开始后将合并生成文档。</span>
+            </label>
 
-          <button
-            type="button"
-            disabled={!canStart}
-            onClick={submit}
-            className="mt-4 w-full rounded-md bg-gemini-600 py-2.5 text-sm font-medium text-white hover:bg-gemini-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting ? '正在创建…' : '开始填充'}
-          </button>
-        </section>
+            <button
+              type="button"
+              disabled={!canStart}
+              onClick={submit}
+              className="mt-4 w-full rounded-md bg-gemini-600 py-2.5 text-sm font-medium text-white hover:bg-gemini-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting ? '正在创建…' : '开始填充'}
+            </button>
+          </section>
+        )}
       </div>
     </div>
   )

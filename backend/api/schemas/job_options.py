@@ -64,6 +64,7 @@ class JobOptions(BaseModel):
     outline: list[str] | None = None
     revision_items: list[RevisionItem] | None = None
     template_data: dict[str, str] | None = None
+    generation_hint: str | None = Field(default=None, max_length=2000)
 
 
 DEFAULT_JOB_OPTIONS = JobOptions()
@@ -114,6 +115,7 @@ def job_options_from_form(
     core_topic: str | None = None,
     outline: list[str] | None = None,
     template_data: dict[str, str] | None = None,
+    generation_hint: str | None = None,
 ) -> JobOptions:
     return JobOptions(
         generation_mode=generation_mode,  # type: ignore[arg-type]
@@ -130,6 +132,7 @@ def job_options_from_form(
         core_topic=core_topic,
         outline=outline,
         template_data=template_data,
+        generation_hint=generation_hint,
     )
 
 
@@ -163,4 +166,6 @@ def format_options_for_prompt(opts: JobOptions) -> str:
             for key, val in opts.template_data.items():
                 preview = val if len(val) <= 80 else f"{val[:77]}…"
                 lines.append(f"  - {key}: {preview}")
+    if opts.generation_hint:
+        lines.append(f"- 生成微调：{opts.generation_hint}")
     return "\n".join(lines)
