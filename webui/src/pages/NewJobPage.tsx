@@ -6,7 +6,13 @@ import { useAuthStore } from '../stores/authStore'
 import { notifyError, notifySuccess } from '../stores/toastStore'
 import { invalidateJobLists } from '../hooks/useJobs'
 import { FileUploadZone } from '../components/jobs/FileUploadZone'
-import { TemplateGallery } from '../components/templates/TemplateGallery'
+import { AiAutoFillButton } from '../components/jobs/AiAutoFillButton'
+import { AiOptimizeButton } from '../components/jobs/AiOptimizeButton'
+import {
+  applySuggestedOptions,
+  outlineToText,
+  type AiAutoFillResult,
+} from '../lib/aiAutoFill'
 import {
   AUDIENCE_OPTIONS,
   CITATION_STYLE_OPTIONS,
@@ -19,7 +25,6 @@ import {
   TONE_OPTIONS,
   formatJobOptionsSummary,
   parseOutlineLines,
-  type GenerationMode,
   type JobOptions,
 } from '../lib/jobOptions'
 import { pickHint } from '../lib/aiHints'
@@ -78,6 +83,7 @@ export function NewJobPage() {
   const [options, setOptions] = useState<JobOptions>(DEFAULT_JOB_OPTIONS)
   const [coreTopic, setCoreTopic] = useState('')
   const [outlineText, setOutlineText] = useState('')
+  const [keyPoints, setKeyPoints] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [planConfirmed, setPlanConfirmed] = useState(false)
@@ -85,10 +91,8 @@ export function NewJobPage() {
 
   const prerequisitesOk = useMemo(() => {
     if (quota() <= 0) return false
-    if (!coreTopic.trim()) return false
-    if (options.generation_mode === 'template' && !options.template_id) return false
-    return true
-  }, [quota, coreTopic, options.generation_mode, options.template_id])
+    return !!coreTopic.trim()
+  }, [quota, coreTopic])
 
   const canStart = useMemo(
     () => prerequisitesOk && planConfirmed && !submitting,
@@ -100,12 +104,12 @@ export function NewJobPage() {
     setPlanConfirmed(false)
   }
 
-  const setGenerationMode = (mode: GenerationMode) => {
-    setOptions((o) => ({
-      ...o,
-      generation_mode: mode,
-      template_id: mode === 'freeform' ? null : o.template_id,
-    }))
+  const applyAutoFill = (data: AiAutoFillResult) => {
+    if (data.core_topic?.trim()) setCoreTopic(data.core_topic.trim())
+    if (data.outline?.length) setOutlineText(outlineToText(data.outline))
+    if (data.key_points?.length) setKeyPoints(data.key_points)
+    setOptions((o) => applySuggestedOptions(o, data.suggested_options))
+    setOpenOptions(true)
     setPlanConfirmed(false)
   }
 
@@ -116,8 +120,7 @@ export function NewJobPage() {
       const fd = new FormData()
       fd.append('prompt', coreTopic.trim())
       if (projectName.trim()) fd.append('project_name', projectName.trim())
-      fd.append('generation_mode', options.generation_mode)
-      if (options.template_id) fd.append('template_id', options.template_id)
+      fd.append('generation_mode', 'freeform')
       fd.append('language', options.language)
       fd.append('scenario', options.scenario)
       fd.append('audience', options.audience)
@@ -127,7 +130,7 @@ export function NewJobPage() {
       fd.append('include_cover', options.include_cover ? 'true' : 'false')
       fd.append('page_size', options.page_size)
       if (options.citation_style) fd.append('citation_style', options.citation_style)
-      if (coreTopic.trim()) fd.append('core_topic', coreTopic.trim())
+      fd.append('core_topic', coreTopic.trim())
       if (outlineText.trim()) fd.append('outline', outlineText)
       for (const f of files) fd.append('files', f, f.name)
       const job = await api<{ id: string }>('POST', '/api/jobs', fd)
@@ -150,7 +153,7 @@ export function NewJobPage() {
         <div>
           <h1 className="text-xl font-semibold">创建 Word 文档</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            选择自由撰写或模板填充，配置文档选项后开始生成。
+            输入核心主题后，可用 AI 自动生成大纲与文档选项；确认后开始生成。
           </p>
         </div>
         <Link to="/" className="text-sm text-slate-500 hover:text-gemini-600">
@@ -161,48 +164,7 @@ export function NewJobPage() {
       <div className="space-y-4">
         <section className={PANEL_CLASS}>
           <h2 className={SECTION_HEADER}>
-            <span>① 生成模式</span>
-          </h2>
-          <div className="mt-3 space-y-3">
-            <div className="inline-flex rounded-md border border-slate-200 p-0.5 dark:border-slate-700">
-              {(['freeform', 'template'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setGenerationMode(m)}
-                  className={`rounded px-4 py-1.5 text-sm transition ${
-                    options.generation_mode === m
-                      ? 'bg-gemini-600 text-white'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-300'
-                  }`}
-                >
-                  {m === 'freeform' ? '自由撰写' : '模板填充'}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-400">
-              {options.generation_mode === 'freeform'
-                ? '由 AI 按大纲自由撰写 Word 文档。'
-                : '选择内置或自定义模板，填充 {{key}} 占位符。'}
-            </p>
-
-            {options.generation_mode === 'template' && (
-              <div>
-                <span className="text-xs text-slate-500">选择模板</span>
-                <div className="mt-2">
-                  <TemplateGallery
-                    value={options.template_id}
-                    onChange={(id) => set('template_id', id)}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className={PANEL_CLASS}>
-          <h2 className={SECTION_HEADER}>
-            <span>② 内容与素材</span>
+            <span>① 内容与素材</span>
           </h2>
           <div className="mt-3 space-y-3">
             <label className="block">
@@ -216,9 +178,42 @@ export function NewJobPage() {
             </label>
 
             <div>
-              <span className="text-xs text-slate-500">
-                核心主题 <span className="text-rose-500">*</span>
-              </span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">
+                  核心主题 <span className="text-rose-500">*</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <AiAutoFillButton
+                    coreTopic={coreTopic}
+                    files={files}
+                    language={options.language}
+                    scenario={options.scenario}
+                    audience={options.audience}
+                    tone={options.tone}
+                    disabled={!coreTopic.trim() && files.length === 0}
+                    onResult={(data) => applyAutoFill(data)}
+                  />
+                  <AiOptimizeButton
+                    endpoint="generate-outline"
+                    label="仅生成大纲"
+                    disabled={!coreTopic.trim()}
+                    body={{
+                      core_topic: coreTopic.trim(),
+                      page_count: options.section_count,
+                      scenario: options.scenario,
+                      audience: options.audience,
+                      language: options.language,
+                    }}
+                    onResult={(data) => {
+                      const outline = data.outline
+                      if (Array.isArray(outline) && outline.length > 0) {
+                        setOutlineText(outline.map(String).join('\n'))
+                        setPlanConfirmed(false)
+                      }
+                    }}
+                  />
+                </div>
+              </div>
               <textarea
                 value={coreTopic}
                 onChange={(e) => {
@@ -233,6 +228,19 @@ export function NewJobPage() {
 
             {hint && (
               <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+            )}
+
+            {keyPoints.length > 0 && (
+              <div className="rounded-md border border-gemini-100 bg-gemini-50/60 px-3 py-2 dark:border-gemini-900 dark:bg-gemini-950/30">
+                <p className="text-[11px] font-medium text-gemini-700 dark:text-gemini-300">
+                  AI 建议要点
+                </p>
+                <ul className="mt-1 list-inside list-disc text-xs text-slate-600 dark:text-slate-300">
+                  {keyPoints.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <FileUploadZone files={files} onChange={setFiles} />
@@ -259,7 +267,7 @@ export function NewJobPage() {
             onClick={() => setOpenOptions((v) => !v)}
             className={SECTION_HEADER}
           >
-            <span>③ 文档选项</span>
+            <span>② 文档选项</span>
             <span className="text-slate-400">{openOptions ? '▾' : '▸'}</span>
           </button>
           {openOptions && (
@@ -353,7 +361,7 @@ export function NewJobPage() {
         )}
 
         <section className="rounded-xl border-2 border-gemini-200 bg-gemini-50/40 p-4 shadow-sm dark:border-gemini-800 dark:bg-gemini-950/30">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">④ 确认并提交</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">③ 确认并提交</h2>
           <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {formatJobOptionsSummary(options)}
             {outlineLines.length > 0 && ` · 大纲 ${outlineLines.length} 节`}

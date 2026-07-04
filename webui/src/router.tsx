@@ -8,6 +8,7 @@ import { JobDetailPage } from './pages/JobDetailPage'
 import { EditJobPage } from './pages/EditJobPage'
 import { AdminPage } from './pages/AdminPage'
 import { TemplatesPage } from './pages/TemplatesPage'
+import { TemplateFillPage } from './pages/TemplateFillPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const me = useAuthStore((s) => s.me)
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Route path="jobs/:id" element={<JobDetailPage />} />
         <Route path="jobs/:id/edit" element={<EditJobPage />} />
         <Route path="templates" element={<TemplatesPage />} />
+        <Route path="templates/fill" element={<TemplateFillPage />} />
         <Route path="admin" element={<AdminPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

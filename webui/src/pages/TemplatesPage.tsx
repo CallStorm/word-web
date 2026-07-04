@@ -93,8 +93,8 @@ export function TemplatesPage() {
             内置模板来自 word-master；也可上传自定义 .docx 模板（含 {'{{key}}'} 占位符）。
           </p>
         </div>
-        <Link to="/jobs/new" className="text-sm text-gemini-600 hover:underline">
-          创建文档 →
+        <Link to="/templates/fill" className="text-sm text-gemini-600 hover:underline">
+          模板填充 →
         </Link>
       </div>
 

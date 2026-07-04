@@ -32,6 +32,12 @@ export function AppShell() {
             创建
           </Link>
           <Link
+            to="/templates/fill"
+            className="rounded-sm border border-office-border px-3 py-1.5 text-office-muted hover:bg-[#edebe9] dark:border-[#3b3a39] dark:text-[#c8c6c4] dark:hover:bg-[#3b3a39]"
+          >
+            模板填充
+          </Link>
+          <Link
             to="/templates"
             className="rounded-sm border border-office-border px-3 py-1.5 text-office-muted hover:bg-[#edebe9] dark:border-[#3b3a39] dark:text-[#c8c6c4] dark:hover:bg-[#3b3a39]"
           >
