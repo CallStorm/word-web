@@ -1,6 +1,8 @@
 import type { GlobalRevisionKind } from '../../api/types'
 import { GLOBAL_REVISION_KIND_OPTIONS } from '../../lib/pptJobOptions'
 
+const WORD_GLOBAL_KINDS: GlobalRevisionKind[] = ['content', 'custom']
+
 const KIND_HINTS: Record<GlobalRevisionKind, string> = {
   colors: '统一调整主色、背景、文字色',
   typography: '全文统一字体栈',
@@ -13,15 +15,20 @@ export function GlobalEditTypeCards({
   value,
   onChange,
   disabledKinds,
+  allowedKinds = WORD_GLOBAL_KINDS,
 }: {
   value: GlobalRevisionKind
   onChange: (k: GlobalRevisionKind) => void
   disabledKinds?: GlobalRevisionKind[]
+  allowedKinds?: GlobalRevisionKind[]
 }) {
   const disabled = new Set(disabledKinds ?? [])
+  const options = GLOBAL_REVISION_KIND_OPTIONS.filter((opt) =>
+    allowedKinds.includes(opt.value),
+  )
   return (
     <div className="space-y-2">
-      {GLOBAL_REVISION_KIND_OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const kind = opt.value
         const isDisabled = disabled.has(kind)
         const selected = value === kind

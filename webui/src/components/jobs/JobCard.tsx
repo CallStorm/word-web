@@ -5,7 +5,7 @@ import { downloadUrl } from '../../api/client'
 import { StatusPill } from './StatusPill'
 import { QueueBadge } from './QueueBadge'
 import { CoverPlaceholder } from './CoverPlaceholder'
-import { SlidePreviewModal } from './SlidePreviewModal'
+import { AuthenticatedSlideImage } from './AuthenticatedSlideImage'
 import { confirmDialog } from '../../stores/modalStore'
 import { useDeleteJob, useRetryJob } from '../../hooks/useJobs'
 import { notifyError, notifySuccess } from '../../stores/toastStore'
@@ -28,11 +28,9 @@ export function JobCard({
   const deleteJob = useDeleteJob()
   const retryJob = useRetryJob()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [previewFailed, setPreviewFailed] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  const previewOk = !!job.has_preview && isDone && !previewFailed
+  const previewOk = !!job.has_preview && isDone
 
   useEffect(() => {
     if (!menuOpen) return
@@ -45,25 +43,20 @@ export function JobCard({
     return () => document.removeEventListener('mousedown', close)
   }, [menuOpen])
 
-  const stop = (e: React.MouseEvent) => {
-    e.preventDefault()
+  const stopBubble = (e: React.MouseEvent) => {
     e.stopPropagation()
   }
 
   const handleDownload = (e: React.MouseEvent) => {
-    stop(e)
+    e.preventDefault()
+    e.stopPropagation()
     if (!hasDocx) return
     downloadUrl(`/api/jobs/${job.id}/docx`, `${job.project_name || job.id}.docx`)
   }
 
-  const handlePreview = (e: React.MouseEvent) => {
-    stop(e)
-    setMenuOpen(false)
-    setPreviewOpen(true)
-  }
-
   const handleRetry = async (e: React.MouseEvent) => {
-    stop(e)
+    e.preventDefault()
+    e.stopPropagation()
     setMenuOpen(false)
     try {
       await retryJob.mutateAsync(job.id)
@@ -73,12 +66,14 @@ export function JobCard({
   }
 
   const handleMenuToggle = (e: React.MouseEvent) => {
-    stop(e)
+    e.preventDefault()
+    e.stopPropagation()
     setMenuOpen((v) => !v)
   }
 
   const handleDelete = async (e: React.MouseEvent) => {
-    stop(e)
+    e.preventDefault()
+    e.stopPropagation()
     setMenuOpen(false)
     const ok = await confirmDialog({
       title: '删除作品',
@@ -119,32 +114,31 @@ export function JobCard({
       <Link to={`/jobs/${job.id}`} className="block">
         <div className="relative aspect-video overflow-hidden rounded-t-xl bg-slate-100 dark:bg-slate-800">
           {previewOk ? (
-            <img
-              src={`/api/jobs/${job.id}/preview`}
+            <AuthenticatedSlideImage
+              url={`/api/jobs/${job.id}/preview`}
               alt={job.project_name || '封面预览'}
               className="h-full w-full object-cover object-top"
               loading="lazy"
-              onError={() => setPreviewFailed(true)}
             />
           ) : (
-            <CoverPlaceholder status={job.status} id={job.id} />
+            <CoverPlaceholder status={job.status} id={job.id} hasDocx={hasDocx} />
           )}
 
           {(isDone || canRetry) && (
             <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/85 px-1.5 py-1 opacity-0 shadow-sm backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-slate-900/85">
-              {isDone && (
-                <button
-                  type="button"
-                  onClick={handlePreview}
+              {isDone && hasDocx && (
+                <Link
+                  to={`/jobs/${job.id}/edit`}
+                  onClick={stopBubble}
                   className="rounded-full p-1 text-gemini-600 hover:bg-gemini-100 dark:hover:bg-gemini-900/30"
-                  title="预览"
-                  aria-label="预览"
+                  title="预览与修改"
+                  aria-label="预览与修改"
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
-                </button>
+                </Link>
               )}
               {isDone && showDownload && (
                 <button
@@ -160,20 +154,6 @@ export function JobCard({
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
                 </button>
-              )}
-              {isDone && hasDocx && (
-                <Link
-                  to={`/jobs/${job.id}/edit`}
-                  className="rounded-full p-1 text-gemini-600 hover:bg-gemini-100 dark:hover:bg-gemini-900/30"
-                  title="编辑修改"
-                  aria-label="编辑修改"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                </Link>
               )}
               {canRetry && (
                 <button
@@ -245,24 +225,6 @@ export function JobCard({
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 min-w-[120px] rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                {isDone && (
-                  <button
-                    type="button"
-                    onClick={handlePreview}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    预览
-                  </button>
-                )}
-                {showDownload && (
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    下载 DOCX
-                  </button>
-                )}
                 {isDone && hasDocx && (
                   <Link
                     to={`/jobs/${job.id}/edit`}
@@ -272,8 +234,17 @@ export function JobCard({
                       setMenuOpen(false)
                     }}
                   >
-                    编辑修改
+                    预览与修改
                   </Link>
+                )}
+                {showDownload && (
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    下载 DOCX
+                  </button>
                 )}
                 {canRetry && (
                   <button
@@ -316,14 +287,6 @@ export function JobCard({
           </p>
         )}
       </div>
-
-      {previewOpen && (
-        <SlidePreviewModal
-          jobId={job.id}
-          jobName={job.project_name || '(未命名)'}
-          onClose={() => setPreviewOpen(false)}
-        />
-      )}
     </article>
   )
 }

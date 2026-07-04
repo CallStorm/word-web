@@ -19,11 +19,21 @@ Generate a Word document from scratch based on user prompt and optional attachme
 
 4. **Build sections** — For each section in `outline.md`:
    ```bash
+   # Document title (once, at the top)
+   officecli add exports/<name>.docx /body --type paragraph \
+     --prop text="<document title>" --prop style=Title
+   # Section headings
    officecli add exports/<name>.docx /body --type paragraph \
      --prop text="<heading>" --prop style=Heading1
+   # Optional subsections
+   officecli add exports/<name>.docx /body --type paragraph \
+     --prop text="<subheading>" --prop style=Heading2
+   # Body paragraphs
    officecli add exports/<name>.docx /body --type paragraph \
      --prop text="<body text>" --prop style=Normal
    ```
+
+   **Never** use `Normal` + manual bold for titles. Map `outline.md` hierarchy to Word styles.
 
 5. **Optional TOC** — If `include_toc` is true:
    ```bash
@@ -47,9 +57,11 @@ Generate a Word document from scratch based on user prompt and optional attachme
    officecli batch exports/<name>.docx --input batch.json
    ```
 
-9. **Verify** — `officecli view issues`, `officecli validate`, fix errors
+9. **Verify** — `officecli view issues`, `officecli validate`, `officecli view outline` (Title → Heading1 → Normal), fix errors
 
-10. **Close** — `officecli close exports/<name>.docx`
+10. **Preview** — `bash skills/word-master/scripts/generate_preview.sh "$WORK_ROOT"`
+
+11. **Close** — `officecli close exports/<name>.docx`
 
 ## Long Document Strategy
 

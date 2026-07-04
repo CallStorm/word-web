@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs npm \
     git \
     poppler-utils \
+    chromium \
     fonts-noto-cjk fonts-noto-cjk-extra fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 

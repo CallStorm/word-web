@@ -121,8 +121,11 @@ def build_initial_prompt(
         "1. 所有产物写入 WORK_ROOT，最终 .docx 必须在 exports/ 目录下。",
         "2. 先运行 source_to_md.py 解析上传素材，再写 outline.md，再构建文档。",
         "3. 使用 officecli 操作文档；不确定语法时运行 officecli help docx。",
-        "4. 交付前必须 officecli view issues 和 officecli validate。",
-        "5. 完成导出后明确告知 exports 下生成的 .docx 路径。",
+        "4. 构建文档时必须为文档标题设置 style=Title，章节设置 style=Heading1，正文设置 style=Normal；"
+        "禁止用 Normal+加粗代替标题；交付前用 officecli view outline 自检。",
+        "5. 交付前必须 officecli view issues 和 officecli validate。",
+        "6. 完成导出后运行 bash skills/word-master/scripts/generate_preview.sh 生成 .preview/page-*.png。",
+        "7. 完成导出后明确告知 exports 下生成的 .docx 路径。",
         "",
     ])
     if upload_paths:

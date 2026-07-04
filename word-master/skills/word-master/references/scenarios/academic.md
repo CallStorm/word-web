@@ -2,7 +2,7 @@
 
 - Use `officecli load_skill academic-paper`
 - Set citation_style from options: APA, IEEE, MLA
-- Structure: Abstract → Introduction → Methods → Results → Discussion → References
+- Structure: Title (style=Title) → Abstract (Heading1) → Introduction/Methods/Results/Discussion (Heading1) → References (Heading1)
 - Use `officecli add ... --type equation` for formulas
 - Use SEQ + PAGEREF for figure/table cross-references
 - Include bibliography section with proper citation format

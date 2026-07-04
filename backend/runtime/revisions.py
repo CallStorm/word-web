@@ -121,56 +121,119 @@ def _format_items_for_prompt(
     return "\n".join(lines)
 
 
+def _word_docx_path_hint() -> str:
+    return (
+        "定位文档：Read outline.md 了解结构；运行 "
+        "`python3 skills/word-master/scripts/find_docx.py <project_dir>` 找到 exports/*.docx；"
+        "用 `officecli view <docx> outline` 查看段落层级。"
+    )
+
+
+def _word_postprocess_steps() -> str:
+    return (
+        "后处理（修改 docx 后必须执行）：\n"
+        "1. `officecli view <docx> issues --json` 与 `officecli validate <docx>`\n"
+        "2. `bash skills/word-master/scripts/generate_preview.sh <project_dir>`\n"
+        "3. 确认 exports/*.docx 仍为最终产物\n"
+    )
+
+
+def _word_figure_insertion_rules() -> str:
+    return (
+        "插图/架构图（若用户要求增加图、表图、流程图、架构图）：\n"
+        "- 图题段落与图片/diagram **必须相邻**（图题在上、图在下），禁止图题与图片相隔数十段\n"
+        "- **禁止**无定位的 `officecli add <docx> /body`（会追加到文档末尾）；"
+        "先用 `officecli view <docx> annotated` 找到锚点段落的 paraId 或 `[段落 /body/p[N]]`，"
+        "再用 `--after '/body/p[@paraId=...]'` 或 `--after /body/p[N]` 插入\n"
+        "- 推荐顺序：① `--type paragraph` 插入图题（Caption 或 Normal，勿用 Heading 充当图题）"
+        " ② 紧接 `--type diagram` 或 `--type image --prop src=...` 插在图题段之后\n"
+        "- 完成后自检：`officecli view <docx> annotated`，确认图题下 1–2 段内出现 `[Image:` 或 diagram；"
+        "若图片落在文档末尾而图题在前部，视为失败，需删除错位图片并 `--after` 重插\n"
+        "- 详见 `skills/word-master/workflows/revision-figures.md`\n"
+    )
+
+
+def _global_revision_user_text(gr: GlobalRevision) -> str:
+    """Human-readable global revision block for mixed prompts."""
+    if gr.kind == "content":
+        parts: list[str] = []
+        if gr.content_preset:
+            parts.append(_CONTENT_PRESET_TEXT.get(gr.content_preset, gr.content_preset))
+        if gr.comment and gr.comment.strip():
+            parts.append(gr.comment.strip())
+        return "\n".join(parts) if parts else "调整全文内容"
+    if gr.kind == "custom" and gr.comment:
+        return gr.comment.strip()
+    return format_global_revision_summary(gr)
+
+
+def _build_mixed_revision_prompt(
+    old_job_id: str,
+    items: list[RevisionItem],
+    gr: GlobalRevision,
+    has_session: bool,
+    slide_names: dict[int, str] | None,
+    page_count: int,
+) -> str:
+    items_text = _format_items_for_prompt(items, slide_names)
+    global_text = _global_revision_user_text(gr)
+    session_note = ""
+    if not has_session:
+        session_note = (
+            "注意：原 session 不可用，你拿不到完整对话历史；请基于 project_dir 自助修改。\n\n"
+        )
+    return (
+        f"{session_note}"
+        f"用户对已完成 Word 文档 (job {old_job_id}) 提出**逐页批注 + 全局修改**（文档约 {page_count} 页），请一并完成：\n\n"
+        f"## 逐页批注\n{items_text}\n\n"
+        f"## 全局修改（{gr.kind}）\n{global_text}\n\n"
+        "操作步骤：\n"
+        f"1. {_word_docx_path_hint()}\n"
+        "2. 先按逐页批注定位修改；comment 含 `[段落 /body/p[N]]` 时用 `officecli view <docx> annotated` 对照\n"
+        "3. 再执行全局修改要求；保留 Title/Heading1/Normal 样式层级\n"
+        f"4. {_word_figure_insertion_rules()}\n"
+        f"5. {_word_postprocess_steps()}\n"
+        f"{_common_revision_constraints()}"
+    )
+
+
 def _build_revision_prompt(
     old_job_id: str,
     items: list[RevisionItem],
     has_session: bool,
     slide_names: dict[int, str] | None,
 ) -> str:
-    """Build the user-facing prompt that the agent will read.
-
-    The same template serves both "small edit" (tweak a label) and
-    "large edit" (replace an image, redraw a layout) — the agent decides
-    based on the comment. We do NOT distinguish the two on the wire.
-    """
+    """Build the user-facing prompt that the agent will read."""
     items_text = _format_items_for_prompt(items, slide_names)
     if has_session:
-        # ── Standard path: full session history is available ──
         return (
-            f"用户对已完成 PPT (job {old_job_id}) 提出如下修改意见，请只改这些页、保留其它页字面不动：\n\n"
+            f"用户对已完成 Word 文档 (job {old_job_id}) 提出如下修改意见，请只改这些页/节、保留其它部分不动：\n\n"
             f"{items_text}\n\n"
             "操作步骤：\n"
-            "1. 用 Read 工具读对应页的 svg_output/page_XX_*.svg 全文（如有引用图片一起读）\n"
-            "2. 根据意见的轻重，自行判断：\n"
-            "   - 若是文案/数字/颜色的微调 → 用 Edit 工具小改后存回原文件\n"
-            "   - 若是换图、换图标、调整布局 → 用 Write 工具整页重画\n"
-            "3. 改完跑：\n"
-            "   `python3 skills/ppt-master/scripts/finalize_svg.py <project_dir>`\n"
-            "   让 svg_final/ 与 svg_output/ 同步（这步会自动修坏命名空间，不需要手动检查）\n"
-            "4. 跑：\n"
-            "   `python3 skills/ppt-master/scripts/svg_to_pptx.py <project_dir>`\n"
-            "   重新导出 pptx 覆盖原文件\n"
-            "5. 完成后只回复「修改完成」四个字，结束本轮\n\n"
+            f"1. {_word_docx_path_hint()}\n"
+            "2. 将用户指定的「第 N 页」对应到 docx 中的段落/节（可用 preview 页码或 outline 顺序定位）；"
+            "若 comment 含 `[段落 /body/p[N]]`，用 `officecli view <docx> annotated` 对照 data-path 定位\n"
+            "3. 用 `officecli set/add/batch` 修改对应内容；保留 Title/Heading1/Normal 样式层级\n"
+            "   若 comment 含 `[位置 x%,y%]`（旧格式），按页码与坐标区域定位\n"
+            f"4. {_word_figure_insertion_rules()}\n"
+            f"5. {_word_postprocess_steps()}\n"
+            "6. 完成后只回复「修改完成」四个字，结束本轮\n\n"
             "硬性约束：\n"
-            "- 不要修改用户未提及的页（即使你看到可以更漂亮的地方）\n"
-            "- 不要重新调用 image_search / image_gen 选新图（除非用户意见里明确要求换图）\n"
+            "- 不要修改用户未提及的页/节\n"
             "- 不要进入 Eight Confirmations 等需要用户交互的环节\n"
             "- 这一轮只跑一次；想再改就让用户重新提交\n"
         )
-    # ── Degraded path: no session_id (container restart, etc.) ──
     return (
-        f"用户对已完成 PPT (job {old_job_id}) 提出修改意见。注意：原 session 不可用，"
-        f"你拿不到之前的完整对话历史；已自动放行，让你基于当前 project_dir 自助修改。\n\n"
+        f"用户对已完成 Word 文档 (job {old_job_id}) 提出修改意见。注意：原 session 不可用，"
+        f"你拿不到之前的完整对话历史；请基于 project_dir 自助修改。\n\n"
         f"修改意见：\n{items_text}\n\n"
         "操作步骤：\n"
-        "1. 用 Read 工具读 design_spec.md / spec_lock.md（如存在）了解原 deck 的结构与风格\n"
-        "2. 读 svg_output/ 下的全部 SVG 自己建立上下文\n"
-        "3. 仅修改用户列出的页；保留其它页字面不动\n"
-        "4. 跑：\n"
-        "   `python3 skills/ppt-master/scripts/finalize_svg.py <project_dir>`\n"
-        "   `python3 skills/ppt-master/scripts/svg_to_pptx.py <project_dir>`\n"
+        f"1. {_word_docx_path_hint()}\n"
+        "2. 仅修改用户列出的页/节；保留其它部分不动\n"
+        f"3. {_word_figure_insertion_rules()}\n"
+        f"4. {_word_postprocess_steps()}\n"
         "5. 完成后只回复「修改完成」四个字，结束本轮\n\n"
-        "硬性约束：同上（不另开选图、不动未提及页、不进交互环节）\n"
+        "硬性约束：同上（不动未提及页/节、不进交互环节）\n"
     )
 
 
@@ -220,16 +283,8 @@ def _common_revision_constraints() -> str:
     return (
         "硬性约束：\n"
         "- 不要进入 Eight Confirmations 等需要用户交互的环节\n"
-        "- 不要主动重新调用 image_search / image_gen（除非用户明确要求换图）\n"
+        "- 不要修改用户未明确要求的页/节\n"
         "- 这一轮只跑一次；完成后只回复「修改完成」四个字，结束本轮\n"
-    )
-
-
-def _postprocess_steps() -> str:
-    return (
-        "后处理（每次修改 SVG 后必须执行）：\n"
-        "1. `python3 skills/ppt-master/scripts/finalize_svg.py <project_dir>`\n"
-        "2. `python3 skills/ppt-master/scripts/svg_to_pptx.py <project_dir>`\n"
     )
 
 
@@ -239,64 +294,28 @@ def _build_global_revision_prompt(
     page_count: int,
     has_session: bool,
 ) -> str:
-    """Build agent prompt for deck-wide modifications."""
+    """Build agent prompt for document-wide modifications."""
     session_note = ""
     if not has_session:
         session_note = (
             "注意：原 session 不可用，你拿不到完整对话历史；"
-            "请基于 project_dir 自助修改。先 Read design_spec.md / spec_lock.md。\n\n"
+            "请基于 project_dir 自助修改。\n\n"
         )
 
     kind_intro = (
-        f"用户对已完成 PPT (job {old_job_id}) 提出**全局修改**（共 {page_count} 页），"
+        f"用户对已完成 Word 文档 (job {old_job_id}) 提出**全局修改**（共 {page_count} 页），"
         f"类型：{gr.kind}。\n\n"
     )
 
-    if gr.kind == "colors" and gr.color_changes:
-        changes = "\n".join(
-            f"- colors.{k} → {v}" for k, v in gr.color_changes.items()
-        )
-        body = (
+    if gr.kind in ("colors", "typography", "visual_style"):
+        return (
             f"{session_note}{kind_intro}"
-            f"配色变更：\n{changes}\n\n"
-            "操作步骤：\n"
-            "1. 对每个变更运行 update_spec.py（示例："
-            "`python3 skills/ppt-master/scripts/update_spec.py <project_dir> colors.primary=#0066AA`"
-            "；裸 key 如 primary=#... 也可）\n"
-            "2. **禁止**重画页面或改布局，只做色值替换\n"
-            f"{_postprocess_steps()}\n"
+            "此类型修改请转为 officecli 文档操作：\n"
+            f"1. {_word_docx_path_hint()}\n"
+            "2. 用 `officecli set` 调整样式或段落格式；不要修改 /styles /theme（模板约束）\n"
+            f"3. {_word_postprocess_steps()}\n"
             f"{_common_revision_constraints()}"
         )
-        return body
-
-    if gr.kind == "typography" and gr.font_family:
-        fam = gr.font_family.replace("'", "\\'")
-        body = (
-            f"{session_note}{kind_intro}"
-            f"目标字体栈：{gr.font_family}\n\n"
-            "操作步骤：\n"
-            "1. 运行：\n"
-            f"   `python3 skills/ppt-master/scripts/update_spec.py <project_dir> "
-            f"typography.font_family='{fam}'`\n"
-            "2. **禁止**重画页面，只做 font-family 全局替换\n"
-            f"{_postprocess_steps()}\n"
-            f"{_common_revision_constraints()}"
-        )
-        return body
-
-    if gr.kind == "visual_style" and gr.visual_style:
-        body = (
-            f"{session_note}{kind_intro}"
-            f"目标视觉风格：{gr.visual_style}\n\n"
-            "操作步骤：\n"
-            "1. 更新 spec_lock.md 的 visual_style 为上述值；同步 design_spec.md（如存在）\n"
-            "2. Read 对应 visual-styles 参考文件了解新风格规则\n"
-            f"3. **逐页重画全部 {page_count} 页**：每页生成前重读 spec_lock.md；"
-            "用 Write 工具写入 svg_output/page_XX_*.svg\n"
-            f"{_postprocess_steps()}\n"
-            f"{_common_revision_constraints()}"
-        )
-        return body
 
     if gr.kind == "content":
         preset_line = ""
@@ -305,31 +324,27 @@ def _build_global_revision_prompt(
         comment_line = ""
         if gr.comment and gr.comment.strip():
             comment_line = f"用户补充：{gr.comment.strip()}\n"
-        body = (
+        return (
             f"{session_note}{kind_intro}"
             f"{preset_line}{comment_line}\n"
             "操作步骤：\n"
-            f"1. 逐页 Read svg_output/ 下全部 {page_count} 页的 SVG\n"
-            "2. 按基调修改文案；尽量用 Edit 小改，版式大动才 Write 重画\n"
-            "3. 不要改颜色、图片、图标（除非补充说明里明确要求）\n"
-            f"{_postprocess_steps()}\n"
+            f"1. {_word_docx_path_hint()}\n"
+            f"2. 按基调修改全文文案（共约 {page_count} 页）；保留 Title/Heading1/Normal 样式\n"
+            "3. 尽量用 `officecli set --prop find=... --prop replace=...` 或 batch 小改\n"
+            f"4. {_word_postprocess_steps()}\n"
             f"{_common_revision_constraints()}"
         )
-        return body
 
-    # custom
     comment = (gr.comment or "").strip()
-    body = (
+    return (
         f"{session_note}{kind_intro}"
         f"用户全局指令：\n{comment}\n\n"
-        "请自行判断操作轻重：\n"
-        "- 换色/换字 → 优先 update_spec.py\n"
-        "- 换风格/大改布局 → 逐页重画\n"
-        "- 改文案 → 尽量 Edit 保留版式\n"
-        f"{_postprocess_steps()}\n"
+        "请自行判断操作轻重，使用 officecli 修改 docx：\n"
+        "- 改文案 → set/batch 替换\n"
+        "- 改结构 → add/remove/move 段落，保持样式层级\n"
+        f"{_word_postprocess_steps()}\n"
         f"{_common_revision_constraints()}"
     )
-    return body
 
 
 # ---------------------------------------------------------------------------
@@ -363,10 +378,9 @@ def queue_revision(
     from backend.models import Job, User  # noqa: WPS433
 
     is_global = global_revision is not None
-    if not is_global and not items:
-        raise RevisionError("at least one revision item is required")
-    if is_global and items:
-        raise RevisionError("cannot combine per-page items with global_revision")
+    has_items = bool(items)
+    if not has_items and not is_global:
+        raise RevisionError("at least one revision item or global_revision is required")
 
     new_job_id = str(uuid.uuid4())
     log.info(
@@ -410,7 +424,19 @@ def queue_revision(
         old_opts.pop("global_revision", None)
         old_opts.pop("revision_mode", None)
 
-        if is_global and global_revision:
+        if is_global and global_revision and has_items:
+            old_opts["revision_mode"] = "mixed"
+            old_opts["revision_items"] = [it.model_dump() for it in items]
+            old_opts["global_revision"] = global_revision.model_dump()
+            prompt = _build_mixed_revision_prompt(
+                old_job_id=old_job_id,
+                items=items,
+                gr=global_revision,
+                has_session=bool(old.session_id),
+                slide_names=slide_names,
+                page_count=page_count or 1,
+            )
+        elif is_global and global_revision:
             old_opts["revision_mode"] = "global"
             old_opts["global_revision"] = global_revision.model_dump()
             prompt = _build_global_revision_prompt(

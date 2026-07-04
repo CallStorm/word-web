@@ -244,6 +244,14 @@ export function JobDetailPage() {
               取消
             </button>
           )}
+          {job.status === 'done' && hasDocx && (
+            <Link
+              to={`/jobs/${job.id}/edit`}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              预览与修改
+            </Link>
+          )}
           {hasDocx && (
             <button
               type="button"

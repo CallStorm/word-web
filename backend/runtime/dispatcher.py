@@ -5,6 +5,7 @@ import asyncio
 import logging
 import threading
 
+from backend.api.schemas.job_options import parse_job_options
 from backend.app.templates_service import resolve_template_docx
 from backend.config import get_runtime_config
 from backend.db.session import SessionLocal, init_db

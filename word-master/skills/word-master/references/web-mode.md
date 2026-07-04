@@ -38,7 +38,16 @@ When `word-web` dispatches a job, these environment variables are injected into 
 └── projects/<job_id>/              # Agent workspace (= WORK_ROOT)
     ├── sources/summary.md
     ├── outline.md
+    ├── .preview/                   # PNG page screenshots for web UI
+    │   ├── page-1.png              # Dashboard cover thumbnail
+    │   └── page-2.png              # Additional pages (preview modal)
     └── exports/output.docx         # Final artifact
+```
+
+Generate previews before delivery:
+
+```bash
+bash skills/word-master/scripts/generate_preview.sh "$WORK_ROOT"
 ```
 
 ## Web vs Standalone

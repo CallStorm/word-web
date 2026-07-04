@@ -76,6 +76,7 @@ Follow the selected workflow. General rules:
 - Use `officecli batch` for multi-step writes (one save cycle)
 - Use `officecli open` / `officecli close` for long editing sessions
 - Prefer stable `@paraId=` paths from `officecli get --json` over positional indices
+- **Never** use `Normal` + manual bold for titles; map `outline.md` to `Title` / `Heading1` / `Heading2` / `Normal` styles
 
 ## Step 5 — Quality Gate (mandatory)
 
@@ -88,13 +89,29 @@ officecli validate <doc.docx>
 
 Fix all **Error**-severity issues. Warnings should be addressed when feasible.
 
-## Step 6 — Deliver
+Also verify heading hierarchy:
+
+```bash
+officecli view <doc.docx> outline
+```
+
+The document title must use `Title`, sections `Heading1`, body `Normal`.
+
+## Step 6 — Preview + Deliver
+
+Generate PNG previews for word-web (cover + page carousel):
+
+```bash
+bash skills/word-master/scripts/generate_preview.sh "$WORK_ROOT"
+```
+
+Then locate the final artifact:
 
 ```bash
 python3 skills/word-master/scripts/find_docx.py "$WORK_ROOT"
 ```
 
-Report the `exports/*.docx` path to the user. In web mode, ensure the file is under `exports/`.
+Report the `exports/*.docx` path to the user. In web mode, ensure the file is under `exports/` and `.preview/page-*.png` exists.
 
 ## Template Hard Constraints
 

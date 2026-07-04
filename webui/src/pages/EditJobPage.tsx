@@ -1,50 +1,31 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type {
   ContentPreset,
   EditTargetsResponse,
+  GlobalRevisionKind,
   PostRevisionResponse,
   RevisionRequest,
 } from '../api/types'
 import { notifyError, notifySuccess } from '../stores/toastStore'
-import {
-  EditModeTabs,
-  EditPageHeader,
-  type EditMode,
-} from '../components/edit/EditModeTabs'
-import { DeckContextSidebar } from '../components/edit/DeckContextSidebar'
-import {
-  buildGlobalRevisionPayload,
-  GlobalEditPanel,
-} from '../components/edit/GlobalEditPanel'
-import {
-  collectPerPageItems,
-  PerPageEditPanel,
-} from '../components/edit/PerPageEditPanel'
+import { EditPageHeader } from '../components/edit/EditModeTabs'
+import { DocumentReviewLayout } from '../components/edit/DocumentReviewLayout'
+import { buildGlobalRevisionPayload } from '../components/edit/GlobalEditPanel'
 import { EditSubmitFooter } from '../components/edit/EditSubmitFooter'
-import type { JobVisualStyle } from '../lib/pptJobOptions'
+import { collectRevisionItems, type PageAnnotation } from '../lib/pageAnnotations'
 
 export function EditJobPage() {
   const { id: jobId } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
 
-  const initialMode: EditMode =
-    searchParams.get('mode') === 'global' ? 'global' : 'per_page'
-  const [mode, setMode] = useState<EditMode>(initialMode)
-
-  const [comments, setComments] = useState<Record<number, string>>({})
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [annotations, setAnnotations] = useState<PageAnnotation[]>([])
   const [confirmed, setConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const [globalKind, setGlobalKind] = useState<
-    'colors' | 'typography' | 'visual_style' | 'content' | 'custom'
-  >('custom')
-  const [colorDraft, setColorDraft] = useState<Record<string, string>>({})
-  const [fontFamily, setFontFamily] = useState('')
-  const [visualStyle, setVisualStyle] = useState<JobVisualStyle>('swiss-minimal')
+  const [globalKind, setGlobalKind] = useState<GlobalRevisionKind>('content')
   const [contentPreset, setContentPreset] = useState<ContentPreset | null>(null)
   const [contentComment, setContentComment] = useState('')
   const [customComment, setCustomComment] = useState('')
@@ -59,44 +40,38 @@ export function EditJobPage() {
   const slides = targetsQ.data?.slides ?? []
   const isEditable = targetsQ.data?.editable ?? false
   const reason = targetsQ.data?.reason ?? null
-  const specSummary = targetsQ.data?.spec_summary ?? null
+  const documentHtmlUrl = targetsQ.data?.has_document_html
+    ? targetsQ.data.document_html_url
+    : null
+  const documentOutline = targetsQ.data?.document_outline ?? []
 
-  const filledPerPage = useMemo(() => collectPerPageItems(comments), [comments])
+  const annotationCount = useMemo(
+    () => annotations.filter((a) => a.text.trim()).length,
+    [annotations],
+  )
+
+  const filledPerPage = useMemo(
+    () => collectRevisionItems(annotations),
+    [annotations],
+  )
 
   const globalPayload = useMemo(
     () =>
       buildGlobalRevisionPayload(globalKind, {
-        colorDraft,
-        fontFamily,
-        visualStyle,
+        colorDraft: {},
+        fontFamily: '',
+        visualStyle: '',
         contentPreset,
         contentComment,
         customComment,
-      }, specSummary),
-    [
-      globalKind,
-      colorDraft,
-      fontFamily,
-      visualStyle,
-      contentPreset,
-      contentComment,
-      customComment,
-      specSummary,
-    ],
+      }),
+    [globalKind, contentPreset, contentComment, customComment],
   )
 
-  const canSubmit =
-    isEditable &&
-    confirmed &&
-    !submitting &&
-    (mode === 'per_page'
-      ? filledPerPage.length > 0
-      : globalPayload !== null)
+  const hasGlobalRevision = globalPayload !== null
+  const hasRevisionContent = filledPerPage.length > 0 || hasGlobalRevision
 
-  const handleModeChange = (m: EditMode) => {
-    setMode(m)
-    setSearchParams(m === 'global' ? { mode: 'global' } : {}, { replace: true })
-  }
+  const canSubmit = isEditable && confirmed && !submitting && hasRevisionContent
 
   const handleSubmit = async () => {
     if (!jobId) return
@@ -104,20 +79,15 @@ export function EditJobPage() {
       notifyError('请勾选确认后再提交')
       return
     }
+    if (!hasRevisionContent) {
+      notifyError('请至少添加一条批注或一项全局修改')
+      return
+    }
 
-    let body: RevisionRequest
-    if (mode === 'per_page') {
-      if (filledPerPage.length === 0) {
-        notifyError('请至少填写一条修改意见')
-        return
-      }
-      body = { mode: 'per_page', items: filledPerPage }
-    } else {
-      if (!globalPayload) {
-        notifyError('请完成全局修改表单')
-        return
-      }
-      body = { mode: 'global', global_revision: globalPayload }
+    const body: RevisionRequest = {
+      mode: hasGlobalRevision && filledPerPage.length === 0 ? 'global' : 'per_page',
+      items: filledPerPage.length > 0 ? filledPerPage : null,
+      global_revision: globalPayload,
     }
 
     setSubmitting(true)
@@ -137,7 +107,7 @@ export function EditJobPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 p-6">
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-4 p-4 sm:p-6">
       <EditPageHeader jobId={jobId ?? ''} />
 
       {targetsQ.isLoading ? (
@@ -146,7 +116,7 @@ export function EditJobPage() {
         </div>
       ) : targetsQ.error ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
-          无法加载可编辑的页：{String(targetsQ.error)}
+          无法加载文档：{String(targetsQ.error)}
         </div>
       ) : !isEditable ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -155,54 +125,33 @@ export function EditJobPage() {
         </div>
       ) : (
         <>
-          <EditModeTabs mode={mode} onChange={handleModeChange} />
-
           {reason && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
               {reason}
             </div>
           )}
 
-          {mode === 'per_page' ? (
-            <PerPageEditPanel
-              slides={slides}
-              comments={comments}
-              onCommentChange={(index, value) =>
-                setComments((prev) => ({ ...prev, [index]: value }))
-              }
-            />
-          ) : (
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-              <GlobalEditPanel
-                slides={slides}
-                specSummary={specSummary}
-                kind={globalKind}
-                onKindChange={setGlobalKind}
-                colorDraft={colorDraft}
-                onColorDraftChange={(key, value) =>
-                  setColorDraft((prev) => ({ ...prev, [key]: value }))
-                }
-                fontFamily={fontFamily}
-                onFontFamilyChange={setFontFamily}
-                visualStyle={visualStyle}
-                onVisualStyleChange={setVisualStyle}
-                contentPreset={contentPreset}
-                onContentPresetChange={setContentPreset}
-                contentComment={contentComment}
-                onContentCommentChange={setContentComment}
-                customComment={customComment}
-                onCustomCommentChange={setCustomComment}
-              />
-              <DeckContextSidebar slides={slides} specSummary={specSummary} />
-            </div>
-          )}
+          <DocumentReviewLayout
+            slides={slides}
+            currentIndex={currentIndex}
+            onCurrentIndexChange={setCurrentIndex}
+            documentHtmlUrl={documentHtmlUrl}
+            documentOutline={documentOutline}
+            annotations={annotations}
+            onAnnotationsChange={setAnnotations}
+            globalKind={globalKind}
+            onGlobalKindChange={setGlobalKind}
+            contentPreset={contentPreset}
+            onContentPresetChange={setContentPreset}
+            contentComment={contentComment}
+            onContentCommentChange={setContentComment}
+            customComment={customComment}
+            onCustomCommentChange={setCustomComment}
+          />
 
           <EditSubmitFooter
-            mode={mode}
-            slideCount={slides.length}
-            filledCount={
-              mode === 'per_page' ? filledPerPage.length : globalPayload ? 1 : 0
-            }
+            annotationCount={annotationCount}
+            hasGlobalRevision={hasGlobalRevision}
             confirmed={confirmed}
             onConfirmedChange={setConfirmed}
             canSubmit={canSubmit}

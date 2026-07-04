@@ -75,6 +75,8 @@ _spec.loader.exec_module(_revs)
 RevisionError = _revs.RevisionError
 _build_revision_prompt = _revs._build_revision_prompt
 _build_global_revision_prompt = _revs._build_global_revision_prompt
+_build_mixed_revision_prompt = _revs._build_mixed_revision_prompt
+_word_figure_insertion_rules = _revs._word_figure_insertion_rules
 _format_items_for_prompt = _revs._format_items_for_prompt
 format_global_revision_summary = _revs.format_global_revision_summary
 copy_project_dir = _revs.copy_project_dir
@@ -105,12 +107,13 @@ class TestBuildRevisionPrompt(unittest.TestCase):
         self.assertIn("old-1", prompt)
         self.assertIn("第 2 页（pain）: 图太吓人", prompt)
         self.assertIn("第 5 页（capabilities）: 字号加大", prompt)
-        # Standard path includes the explicit finalize + pptx commands.
-        self.assertIn("finalize_svg.py", prompt)
-        self.assertIn("svg_to_pptx.py", prompt)
+        # Word path includes officecli + preview regeneration.
+        self.assertIn("officecli", prompt)
+        self.assertIn("generate_preview.sh", prompt)
         self.assertIn("修改完成", prompt)
+        self.assertIn("--after", prompt)
+        self.assertIn("revision-figures.md", prompt)
         # The degraded-mode disclaimer must NOT appear in the standard path.
-        self.assertNotIn("已自动放行", prompt)
         self.assertNotIn("session 不可用", prompt)
 
     def test_without_session_uses_degraded_template(self) -> None:
@@ -119,8 +122,7 @@ class TestBuildRevisionPrompt(unittest.TestCase):
             old_job_id="old-2", items=items, has_session=False, slide_names=None,
         )
         self.assertIn("session 不可用", prompt)
-        self.assertIn("已自动放行", prompt)
-        self.assertIn("design_spec.md", prompt)
+        self.assertIn("outline.md", prompt)
         self.assertIn("第 3 页: 重画", prompt)
 
     def test_format_items_uses_lookup_when_provided(self) -> None:
@@ -139,6 +141,36 @@ class TestBuildRevisionPrompt(unittest.TestCase):
         out = _format_items_for_prompt(items)
         self.assertIn("第 4 页: x", out)
         self.assertNotIn("（", out)
+
+    def test_figure_insertion_rules_mention_adjacency_and_after(self) -> None:
+        rules = _word_figure_insertion_rules()
+        self.assertIn("--after", rules)
+        self.assertIn("必须相邻", rules)
+        self.assertIn("revision-figures.md", rules)
+
+    def test_mixed_revision_prompt_includes_figure_rules(self) -> None:
+        items = [RevisionItem(slide_index=2, comment="增加架构图")]
+        prompt = _build_mixed_revision_prompt(
+            old_job_id="old-3",
+            items=items,
+            gr=GlobalRevision(kind="custom", comment="统一标题字号"),
+            has_session=True,
+            slide_names={2: "tech"},
+            page_count=10,
+        )
+        self.assertIn("--after", prompt)
+        self.assertIn("增加架构图", prompt)
+        self.assertIn("统一标题字号", prompt)
+
+    def test_format_items_allows_duplicate_slide_index(self) -> None:
+        items = [
+            RevisionItem(slide_index=2, comment="改标题"),
+            RevisionItem(slide_index=2, comment="加架构图"),
+        ]
+        out = _format_items_for_prompt(items)
+        self.assertEqual(out.count("第 2 页:"), 2)
+        self.assertIn("改标题", out)
+        self.assertIn("加架构图", out)
 
 
 # ---------------------------------------------------------------------------
@@ -402,9 +434,9 @@ class TestQueueRevision(unittest.TestCase):
             )
 
         new_job = added[0]
-        self.assertIn("已自动放行", new_job.prompt,
+        self.assertIn("session 不可用", new_job.prompt,
                       "no-session jobs must use the degraded prompt template")
-        self.assertIn("design_spec.md", new_job.prompt)
+        self.assertIn("outline.md", new_job.prompt)
 
 
 # ---------------------------------------------------------------------------
@@ -413,21 +445,17 @@ class TestQueueRevision(unittest.TestCase):
 
 
 class TestGlobalRevisionSchema(unittest.TestCase):
-    def test_colors_requires_changes(self) -> None:
-        with self.assertRaises(ValueError):
-            GlobalRevision(kind="colors")
+    def test_colors_accepts_changes(self) -> None:
+        gr = GlobalRevision(kind="colors", color_changes={"primary": "#0066AA"})
+        self.assertEqual(gr.kind, "colors")
 
-    def test_colors_validates_hex(self) -> None:
-        with self.assertRaises(ValueError):
-            GlobalRevision(kind="colors", color_changes={"primary": "red"})
+    def test_typography_accepts_font(self) -> None:
+        gr = GlobalRevision(kind="typography", font_family="Arial")
+        self.assertEqual(gr.font_family, "Arial")
 
-    def test_typography_requires_font(self) -> None:
-        with self.assertRaises(ValueError):
-            GlobalRevision(kind="typography")
-
-    def test_visual_style_validates_enum(self) -> None:
-        with self.assertRaises(ValueError):
-            GlobalRevision(kind="visual_style", visual_style="auto")
+    def test_visual_style_accepts_value(self) -> None:
+        gr = GlobalRevision(kind="visual_style", visual_style="dark-tech")
+        self.assertEqual(gr.visual_style, "dark-tech")
 
     def test_revision_request_global_mode(self) -> None:
         req = RevisionRequest(
@@ -447,7 +475,7 @@ class TestGlobalRevisionSchema(unittest.TestCase):
 
 
 class TestBuildGlobalRevisionPrompt(unittest.TestCase):
-    def test_colors_mentions_update_spec(self) -> None:
+    def test_colors_mentions_officecli(self) -> None:
         gr = GlobalRevision(
             kind="colors",
             color_changes={"primary": "#0066AA"},
@@ -455,19 +483,17 @@ class TestBuildGlobalRevisionPrompt(unittest.TestCase):
         prompt = _build_global_revision_prompt(
             "job-1", gr, page_count=5, has_session=True,
         )
-        self.assertIn("update_spec.py", prompt)
-        self.assertIn("colors.primary", prompt)
-        self.assertIn("#0066AA", prompt)
-        self.assertIn("禁止", prompt)
+        self.assertIn("officecli", prompt)
+        self.assertIn("colors", prompt)
+        self.assertIn("generate_preview.sh", prompt)
 
-    def test_visual_style_requires_redraw(self) -> None:
+    def test_visual_style_mentions_officecli(self) -> None:
         gr = GlobalRevision(kind="visual_style", visual_style="dark-tech")
         prompt = _build_global_revision_prompt(
             "job-1", gr, page_count=8, has_session=True,
         )
-        self.assertIn("dark-tech", prompt)
+        self.assertIn("officecli", prompt)
         self.assertIn("8", prompt)
-        self.assertIn("重画", prompt)
 
     def test_format_global_summary(self) -> None:
         gr = GlobalRevision(

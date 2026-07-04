@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { downloadUrl } from '../../api/client'
-import { useJobSlideNotes, useJobSlides } from '../../hooks/useJobs'
+import { useJobSlides } from '../../hooks/useJobs'
 import { AuthenticatedSlideImage } from './AuthenticatedSlideImage'
 
 interface Props {
@@ -16,10 +16,8 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
   const count = slides.length
 
   const [current, setCurrent] = useState(0)
-  const [showNotes, setShowNotes] = useState(true)
 
   const slide = slides[current]
-  const notesQ = useJobSlideNotes(jobId, slide?.index, !!slide?.has_notes)
 
   const go = useCallback(
     (delta: number) => {
@@ -33,7 +31,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
 
   const jump = useCallback((i: number) => setCurrent(i), [])
 
-  // Keyboard navigation: ←/→ to page, Esc to close.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -44,7 +41,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKey)
   }, [go, onClose])
 
-  // Lock background scroll while open.
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -60,7 +56,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
       aria-modal="true"
       aria-label={`预览：${jobName}`}
     >
-      {/* Top bar */}
       <div className="flex items-center gap-2 px-4 py-3 text-white">
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-medium">{jobName || '预览'}</h2>
@@ -77,13 +72,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => setShowNotes((v) => !v)}
-          className="rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/10"
-        >
-          {showNotes ? '隐藏备注' : '显示备注'}
-        </button>
-        <button
-          type="button"
           onClick={onClose}
           className="rounded-md p-1.5 text-white/80 hover:bg-white/10 hover:text-white"
           aria-label="关闭"
@@ -95,12 +83,18 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
         </button>
       </div>
 
-      {/* Body */}
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center text-white/70">加载中…</div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-white/70">
-          <p>无法加载幻灯片</p>
+          <p>无法加载页面预览</p>
+          <button
+            type="button"
+            onClick={() => downloadUrl(`/api/jobs/${jobId}/docx`, `${jobName || jobId}.docx`)}
+            className="rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/10"
+          >
+            下载 DOCX
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -110,7 +104,16 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
           </button>
         </div>
       ) : count === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-white/70">暂无可预览的幻灯片</div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/70">
+          <p>预览生成中，可先下载 Word 文档查看</p>
+          <button
+            type="button"
+            onClick={() => downloadUrl(`/api/jobs/${jobId}/docx`, `${jobName || jobId}.docx`)}
+            className="rounded-md border border-white/20 px-3 py-1.5 text-xs hover:bg-white/10"
+          >
+            下载 DOCX
+          </button>
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 items-stretch">
@@ -137,20 +140,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
                   />
                 )}
               </div>
-
-              {showNotes && slide?.has_notes && (
-                <div className="max-h-44 shrink-0 overflow-auto border-t border-white/10 bg-black/40 px-4 py-3">
-                  {notesQ.isLoading ? (
-                    <p className="text-xs text-white/50">备注加载中…</p>
-                  ) : notesQ.error ? (
-                    <p className="text-xs text-rose-300">备注加载失败</p>
-                  ) : (
-                    <div className="whitespace-pre-wrap break-words text-xs leading-relaxed text-white/80">
-                      {notesQ.data || ''}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             <button
@@ -166,7 +155,6 @@ export function SlidePreviewModal({ jobId, jobName, onClose }: Props) {
             </button>
           </div>
 
-          {/* Thumbnail strip */}
           <div className="shrink-0 border-t border-white/10 bg-black/50 px-2 py-2">
             <div className="flex gap-2 overflow-x-auto">
               {slides.map((sl, i) => (

@@ -20,7 +20,7 @@ export function EditModeTabs({
             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
         }`}
       >
-        逐页修改
+        逐页/逐节修改
       </button>
       <button
         type="button"
@@ -46,10 +46,10 @@ export function EditPageHeader({
     <header className="flex items-start justify-between gap-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">
-          编辑已完成的 PPT
+          预览与修改
         </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          逐页修改或全局调整视觉/内容。不满意可再次提交；每轮扣 1 积分。
+          选中文字添加批注；右侧可填写全局修改，与批注一并提交。每轮扣 1 积分。
         </p>
       </div>
       <Link

@@ -28,7 +28,14 @@ from backend.auth import CurrentUser
 from backend.db.session import SessionLocal
 from backend.models import Event, Job, User
 from backend.paths import ensure_data_dirs, is_under, project_root_for, safe_stage_name, uploads_dir_for
-from backend.runner.preview import find_cover_preview, list_slides
+from backend.runner.preview import (
+    find_cover_preview,
+    find_document_html,
+    generate_docx_html,
+    generate_docx_outline,
+    list_slides,
+    load_document_outline,
+)
 from backend.runtime import (
     cancel_active,
     is_active,
@@ -395,7 +402,7 @@ async def download_docx(job_id: str, user: CurrentUser):
             raise HTTPException(404, "docx not ready")
     return FileResponse(
         j.docx_path,
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=f"{j.project_name}.docx",
     )
 
@@ -435,6 +442,56 @@ async def download_preview(job_id: str, user: CurrentUser):
                 "cover preview has an invalid SVG namespace; re-run finalize_svg or regenerate",
             )
         return FileResponse(preview, media_type=media_type)
+
+
+def _verified_document_html(j: Job, project_dir: Path | None) -> Path | None:
+    """Return document.html path if it exists under allowed roots."""
+    html = find_document_html(project_dir)
+    if not html:
+        if j.docx_path and project_dir:
+            docx = Path(j.docx_path)
+            if docx.is_file():
+                generate_docx_html(project_dir, docx)
+                html = find_document_html(project_dir)
+        if not html:
+            return None
+
+    allowed_roots: list[Path] = []
+    if j.user_id:
+        allowed_roots.append(project_root_for(j.user_id, j.id).resolve())
+    if j.project_dir:
+        allowed_roots.append(Path(j.project_dir).resolve().parent)
+
+    try:
+        resolved = html.resolve()
+    except (OSError, ValueError):
+        return None
+    if any(is_under(resolved, root) for root in allowed_roots):
+        return html
+    return None
+
+
+@router.get("/{job_id}/document-html")
+async def download_document_html(job_id: str, user: CurrentUser):
+    with SessionLocal() as s:
+        j = get_job_or_404(s, job_id)
+        require_owner_or_admin(j, user)
+        project_dir = resolve_job_project_dir(j)
+        html = _verified_document_html(j, project_dir)
+        if not html:
+            raise HTTPException(404, "document html preview not ready")
+        return FileResponse(html, media_type="text/html; charset=utf-8")
+
+
+def _load_verified_document_outline(j: Job, project_dir: Path | None) -> list[dict]:
+    """Return heading outline, generating on demand when docx is available."""
+    headings = load_document_outline(project_dir)
+    if not headings and j.docx_path and project_dir:
+        docx = Path(j.docx_path)
+        if docx.is_file():
+            generate_docx_outline(project_dir, docx)
+            headings = load_document_outline(project_dir)
+    return headings
 
 
 _SLIDE_MANIFEST_TTL = 15.0
@@ -817,6 +874,9 @@ async def get_edit_targets(job_id: str, user: CurrentUser) -> dict:
         "slides": [],
         "spec_summary": None,
         "job_options": None,
+        "document_html_url": None,
+        "has_document_html": False,
+        "document_outline": [],
     }
     if j.status != "done":
         out["reason"] = (
@@ -867,6 +927,13 @@ async def get_edit_targets(job_id: str, user: CurrentUser) -> dict:
             Path(j.project_dir), page_count=len(out["slides"])
         )
 
+    project_dir = resolve_job_project_dir(j)
+    if _verified_document_html(j, project_dir):
+        out["has_document_html"] = True
+        out["document_html_url"] = f"/api/jobs/{job_id}/document-html"
+
+    out["document_outline"] = _load_verified_document_outline(j, project_dir)
+
     return out
 
 
@@ -889,30 +956,28 @@ async def post_revision(
         raise HTTPException(400, "source job has no slides to edit")
     page_count = len(slides)
 
-    if body.mode == "per_page":
+    has_items = bool(body.items)
+    has_global = body.global_revision is not None
+    if not has_items and not has_global:
+        raise HTTPException(400, "至少提交一条批注或一项全局修改")
+
+    slide_names = {sl["index"]: sl["name"] for sl in slides}
+    if has_items:
         max_idx = max(sl["index"] for sl in slides)
-        seen: set[int] = set()
         for it in body.items or []:
             if it.slide_index < 1 or it.slide_index > max_idx:
                 raise HTTPException(
                     400,
                     f"slide_index {it.slide_index} is out of range 1..{max_idx}",
                 )
-            if it.slide_index in seen:
-                raise HTTPException(
-                    400, f"duplicate slide_index {it.slide_index} in items"
-                )
-            seen.add(it.slide_index)
             if not it.comment.strip():
                 raise HTTPException(
                     400, f"slide {it.slide_index}: comment is empty"
                 )
-        slide_names = {sl["index"]: sl["name"] for sl in slides}
-    else:
-        slide_names = None
+
+    if has_global:
         gr = body.global_revision
-        if gr is None:
-            raise HTTPException(400, "global_revision is required for mode=global")
+        assert gr is not None
         if gr.kind in ("colors", "typography") and not j.project_dir:
             raise HTTPException(400, "project_dir missing")
         if gr.kind in ("colors", "typography"):
@@ -925,21 +990,14 @@ async def post_revision(
 
     from backend.runtime.revisions import queue_revision, RevisionError
     try:
-        if body.mode == "global":
-            new_job_id = queue_revision(
-                old_job_id=job_id,
-                global_revision=body.global_revision,
-                user_id=user.id,
-                page_count=page_count,
-            )
-        else:
-            new_job_id = queue_revision(
-                old_job_id=job_id,
-                items=body.items,
-                user_id=user.id,
-                slide_names=slide_names,
-                page_count=page_count,
-            )
+        new_job_id = queue_revision(
+            old_job_id=job_id,
+            items=body.items if has_items else None,
+            global_revision=body.global_revision if has_global else None,
+            user_id=user.id,
+            slide_names=slide_names if has_items else None,
+            page_count=page_count,
+        )
     except RevisionError as e:
         # Most user-visible failures are 4xx (not done, no credit, …);
         # filesystem failures are 500-ish but we surface them as 400

@@ -14,14 +14,31 @@ Tone = Literal["formal", "casual", "technical", "professional", "concise"]
 PageSize = Literal["A4", "Letter"]
 CitationStyle = Literal["APA", "IEEE", "MLA", "Chicago"]
 
+SPEC_COLOR_KEYS = (
+    "primary",
+    "accent",
+    "bg",
+    "text",
+    "text_secondary",
+    "border",
+)
+
 
 class RevisionItem(BaseModel):
-    section_index: int = Field(ge=1, le=100)
+    slide_index: int = Field(ge=1, le=100)
     comment: str = Field(min_length=1, max_length=1000)
 
 
+ContentPreset = Literal["concise", "formal", "translate_en", "glossary"]
+GlobalRevisionKind = Literal["colors", "typography", "visual_style", "content", "custom"]
+
+
 class GlobalRevision(BaseModel):
-    kind: str = "custom"
+    kind: GlobalRevisionKind = "custom"
+    color_changes: dict[str, str] | None = None
+    font_family: str | None = None
+    visual_style: str | None = None
+    content_preset: ContentPreset | None = None
     comment: str | None = None
 
 
@@ -127,7 +144,7 @@ def format_options_for_prompt(opts: JobOptions) -> str:
     lines.append(f"- 目标章节数：约 {opts.section_count} 节")
     lines.append(f"- 页面尺寸：{opts.page_size}")
     lines.append(f"- 生成目录：{'是' if opts.include_toc else '否'}")
-    lines.append(f"- 封面页：{'是' if opts.include_cover else '否'}")
+    lines.append(f"- 封面页：{'是（文档标题单独使用 style=Title 段落）' if opts.include_cover else '否'}")
     if opts.citation_style:
         lines.append(f"- 引用格式：{opts.citation_style}")
     if opts.core_topic:

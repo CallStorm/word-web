@@ -90,6 +90,14 @@ export interface EditTargetSlide {
   current_note: string
 }
 
+export interface DocumentOutlineHeading {
+  line: number
+  text: string
+  level: number
+  style?: string | null
+  data_path: string
+}
+
 export interface EditTargetsResponse {
   editable: boolean
   reason: string | null
@@ -99,6 +107,9 @@ export interface EditTargetsResponse {
   slides: EditTargetSlide[]
   spec_summary: SpecSummary | null
   job_options: Record<string, unknown> | null
+  document_html_url: string | null
+  has_document_html: boolean
+  document_outline: DocumentOutlineHeading[]
 }
 
 export interface SpecSummary {
