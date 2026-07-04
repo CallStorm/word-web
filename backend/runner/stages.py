@@ -16,6 +16,7 @@ STAGE_RULES: list[tuple[callable, str]] = [
 ]
 
 OUTLINE_RE = re.compile(r"outline\.md$", re.IGNORECASE)
+SPEC_RE = OUTLINE_RE
 SECTION_RE = re.compile(r"Heading1|章节|第.章", re.IGNORECASE)
 
 

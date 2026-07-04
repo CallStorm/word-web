@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 启动 ppt-web：若 webui/dist 不存在则先 build，再拉起 uvicorn。
+# 启动 word-web：若 webui/dist 不存在则先 build，再拉起 uvicorn。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,10 +22,10 @@ if [[ ! -d .venv ]]; then
   exit 1
 fi
 
-IMAGE="${DOCKER_RUNNER_IMAGE:-ppt-runner:latest}"
+IMAGE="${DOCKER_RUNNER_IMAGE:-word-runner:latest}"
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "warning: Docker image $IMAGE not found."
-  echo "  Build it first: bash docker/ppt-runner/build.sh"
+  echo "  Build it first: bash docker/word-runner/build.sh"
 fi
 
 echo "Starting server at http://127.0.0.1:8765/"

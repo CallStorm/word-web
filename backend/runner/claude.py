@@ -112,13 +112,12 @@ def stream_claude(
                         if write_flag and fpath and SPEC_RE.search(fpath):
                             spec_path = WORDMASTER / fpath if not Path(fpath).is_absolute() else Path(fpath)
                             if spec_path.exists():
-                                on_event({
-                                    "kind": "spec",
-                                    "design_spec": (spec_path.read_text(encoding="utf-8")
-                                                    if spec_path.name == "design_spec.md" else None),
-                                    "spec_lock": (spec_path.read_text(encoding="utf-8")
-                                                  if spec_path.name == "spec_lock.md" else None),
-                                })
+                                text = spec_path.read_text(encoding="utf-8")
+                                on_event({"kind": "outline", "sections": [
+                                    ln.strip("# ").strip()
+                                    for ln in text.splitlines()
+                                    if ln.strip().startswith("#")
+                                ]})
             elif etype == "result":
                 final_result = evt
                 on_event({"kind": "result", "result": evt})

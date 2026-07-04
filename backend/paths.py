@@ -65,6 +65,8 @@ def template_path_for(user_id: str, template_id: str) -> Path:
 def builtin_templates_dir() -> Path:
     return DATA_DIR / "templates" / "builtin"
 
+
+def ensure_data_dirs(user_id: str, job_id: str) -> None:
     """建好 uploads/<job_id> 与 projects/<job_id>。"""
     uploads_dir_for(user_id, job_id).mkdir(parents=True, exist_ok=True)
     project_root_for(user_id, job_id).mkdir(parents=True, exist_ok=True)

@@ -188,6 +188,14 @@ def _event_to_db_payload(ev: dict) -> tuple[str, dict] | None:
             "design_spec": ev.get("design_spec"),
             "spec_lock": ev.get("spec_lock"),
         })
+    if k == "outline":
+        return ("outline", {"sections": ev.get("sections", [])})
+    if k == "section":
+        return ("section", {
+            "index": ev.get("index"),
+            "title": ev.get("title"),
+            "status": ev.get("status"),
+        })
     if k == "error":
         return ("error", {"message": ev.get("message", "")})
     return None
