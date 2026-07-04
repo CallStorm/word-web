@@ -1,0 +1,49 @@
+{
+  "templates": [
+    {
+      "stem": "report-zh",
+      "builtin_id": "builtin-report-zh",
+      "name": "工作报告",
+      "category": "report",
+      "description": "标准工作报告，含标题、作者、日期、背景、正文与结论",
+      "placeholders": ["title", "author", "date", "background", "content", "conclusion"],
+      "icon": "📊"
+    },
+    {
+      "stem": "memo-zh",
+      "builtin_id": "builtin-memo-zh",
+      "name": "会议纪要",
+      "category": "memo",
+      "description": "会议纪要模板，含主题、时间、参会人、纪要内容与决议",
+      "placeholders": ["subject", "datetime", "attendees", "minutes", "decisions"],
+      "icon": "📝"
+    },
+    {
+      "stem": "contract-zh",
+      "builtin_id": "builtin-contract-zh",
+      "name": "合同",
+      "category": "contract",
+      "description": "合同模板，含甲乙双方、签署日期、正文与付款条款",
+      "placeholders": ["contract_title", "party_a", "party_b", "sign_date", "contract_body", "payment_terms"],
+      "icon": "📜"
+    },
+    {
+      "stem": "letter-zh",
+      "builtin_id": "builtin-letter-zh",
+      "name": "公函/信件",
+      "category": "letter",
+      "description": "正式公函或信件，含收件人、问候、正文、落款",
+      "placeholders": ["recipient", "greeting", "body", "closing", "sender"],
+      "icon": "✉️"
+    },
+    {
+      "stem": "application-zh",
+      "builtin_id": "builtin-application-zh",
+      "name": "申请书",
+      "category": "application",
+      "description": "申请书模板，含标题、申请人、事由与详细说明",
+      "placeholders": ["application_title", "applicant", "reason", "details"],
+      "icon": "📋"
+    }
+  ]
+}
