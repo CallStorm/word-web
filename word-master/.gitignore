@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.DS_Store
+examples/freeform-report/
+examples/merge-contract/output.docx
+examples/merge-contract/data.json

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "word-master",
+  "owner": {
+    "name": "CallStorm",
+    "url": "https://github.com/CallStorm"
+  },
+  "metadata": {
+    "description": "Word Master skill — generate editable DOCX from text, attachments, or templates via OfficeCLI",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "word-master",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/CallStorm/word-master.git",
+        "path": "skills"
+      },
+      "description": "Generate editable DOCX from text, attachments, or templates — powered by OfficeCLI. Requires officecli binary installed.",
+      "author": {
+        "name": "CallStorm",
+        "url": "https://github.com/CallStorm"
+      },
+      "homepage": "https://github.com/CallStorm/word-master",
+      "repository": "https://github.com/CallStorm/word-master",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "docx",
+        "word",
+        "officecli",
+        "template",
+        "merge",
+        "document-generation",
+        "ai",
+        "skill",
+        "office"
+      ]
+    }
+  ]
+}
