@@ -154,8 +154,8 @@ export function DashboardPage() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
@@ -171,7 +171,7 @@ export function DashboardPage() {
           {jobs.length === 0 ? (
             <>
               <p className="mt-2 max-w-sm text-xs text-slate-400">
-                上传文档或输入主题，AI 将自动生成演示文稿。
+                上传文档或输入主题，AI 将自动生成 Word 文档。
               </p>
               <Link
                 to="/jobs/new"
@@ -192,7 +192,7 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
             {filtered.map((job) => {
               const err = job.error_message?.trim()
               const sharedErrorCount =

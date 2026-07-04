@@ -18,8 +18,10 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 flex h-14 items-center border-b border-slate-200 bg-white/80 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-        <Link to="/" className="mr-6 text-base font-semibold">
+      <header className="app-chrome sticky top-0 z-30">
+        <div className="app-chrome-accent" aria-hidden />
+        <div className="flex h-14 items-center px-4 backdrop-blur">
+        <Link to="/" className="app-brand mr-6">
           {APP_NAME}
         </Link>
         <nav className="flex items-center gap-1 text-sm">
@@ -31,14 +33,14 @@ export function AppShell() {
           </Link>
           <Link
             to="/templates"
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="rounded-sm border border-office-border px-3 py-1.5 text-office-muted hover:bg-[#edebe9] dark:border-[#3b3a39] dark:text-[#c8c6c4] dark:hover:bg-[#3b3a39]"
           >
             模板
           </Link>
           {isAdmin() && (
             <Link
               to="/admin"
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="rounded-sm border border-office-border px-3 py-1.5 text-office-muted hover:bg-[#edebe9] dark:border-[#3b3a39] dark:text-[#c8c6c4] dark:hover:bg-[#3b3a39]"
             >
               管理后台
             </Link>
@@ -65,6 +67,7 @@ export function AppShell() {
           >
             登出
           </button>
+        </div>
         </div>
       </header>
       <main className="flex-1">

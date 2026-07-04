@@ -37,12 +37,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex h-14 items-center border-b border-slate-200 px-6 dark:border-slate-800">
-        <span className="text-lg font-semibold">{APP_NAME}</span>
+    <div className="flex min-h-screen flex-col bg-office-bg dark:bg-[#1b1a19]">
+      <header className="app-chrome">
+        <div className="app-chrome-accent" aria-hidden />
+        <div className="flex h-14 items-center px-6">
+          <span className="app-brand text-lg">{APP_NAME}</span>
+        </div>
       </header>
       <main className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-md dark:bg-slate-900">
+        <div className="w-full max-w-sm rounded-sm border border-office-border bg-office-surface p-6 shadow-md dark:border-[#3b3a39] dark:bg-[#292827]">
           <h1 className="mb-1 text-xl font-semibold">{mode === 'login' ? '登录' : '注册'}</h1>
           <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
             {mode === 'login' ? '邮箱或账号（如 admin）' : '创建账号，需有效邮箱'}

@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Job } from '../../api/types'
 import { downloadUrl } from '../../api/client'
@@ -6,10 +5,11 @@ import { StatusPill } from './StatusPill'
 import { QueueBadge } from './QueueBadge'
 import { CoverPlaceholder } from './CoverPlaceholder'
 import { AuthenticatedSlideImage } from './AuthenticatedSlideImage'
+import { JobCardTitleTip } from './JobCardTitleTip'
 import { confirmDialog } from '../../stores/modalStore'
 import { useDeleteJob, useRetryJob } from '../../hooks/useJobs'
 import { notifyError, notifySuccess } from '../../stores/toastStore'
-import { fmtJobMetaLine, truncate } from '../../lib/format'
+import { DOCUMENT_COVER_CLASS, DOCUMENT_PREVIEW_IMG_CLASS, JOB_CARD_CLASS, JOB_CARD_FOOTER_CLASS } from '../../lib/documentAspect'
 
 export function JobCard({
   job,
@@ -27,21 +27,8 @@ export function JobCard({
     (job.status === 'paused' && !job.session_id)
   const deleteJob = useDeleteJob()
   const retryJob = useRetryJob()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   const previewOk = !!job.has_preview && isDone
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [menuOpen])
 
   const stopBubble = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -57,7 +44,6 @@ export function JobCard({
   const handleRetry = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setMenuOpen(false)
     try {
       await retryJob.mutateAsync(job.id)
     } catch (err) {
@@ -65,16 +51,9 @@ export function JobCard({
     }
   }
 
-  const handleMenuToggle = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setMenuOpen((v) => !v)
-  }
-
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setMenuOpen(false)
     const ok = await confirmDialog({
       title: '删除作品',
       body: `确认删除「${job.project_name || '(未命名)'}」？此操作不可恢复。`,
@@ -101,31 +80,25 @@ export function JobCard({
       ? `相同错误（共 ${sharedErrorCount} 个作品）`
       : errText
 
-  const metaText = fmtJobMetaLine(job)
-  const promptSummary = truncate(job.prompt, 36)
-
   return (
     <article
-      className={`group relative rounded-xl border bg-white shadow-sm transition-all
-                  hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900
-                  ${menuOpen ? 'z-30' : ''}
-                  ${job.status === 'running' ? 'border-l-[3px] border-l-gemini-500 border-slate-200 dark:border-slate-700' : 'border-slate-200 dark:border-slate-700'}`}
+      className={`${JOB_CARD_CLASS}
+                  ${job.status === 'running' ? 'ring-1 ring-inset ring-gemini-200 dark:ring-gemini-800' : ''}`}
     >
       <Link to={`/jobs/${job.id}`} className="block">
-        <div className="relative aspect-video overflow-hidden rounded-t-xl bg-slate-100 dark:bg-slate-800">
+        <div className={DOCUMENT_COVER_CLASS}>
           {previewOk ? (
             <AuthenticatedSlideImage
               url={`/api/jobs/${job.id}/preview`}
               alt={job.project_name || '封面预览'}
-              className="h-full w-full object-cover object-top"
+              className={DOCUMENT_PREVIEW_IMG_CLASS}
               loading="lazy"
             />
           ) : (
             <CoverPlaceholder status={job.status} id={job.id} hasDocx={hasDocx} />
           )}
 
-          {(isDone || canRetry) && (
-            <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/85 px-1.5 py-1 opacity-0 shadow-sm backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-slate-900/85">
+          <div className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-white/85 px-1.5 py-1 opacity-0 shadow-sm backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 dark:bg-slate-900/85">
               {isDone && hasDocx && (
                 <Link
                   to={`/jobs/${job.id}/edit`}
@@ -155,6 +128,21 @@ export function JobCard({
                   </svg>
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleteJob.isPending}
+                className="rounded-full p-1 text-rose-600 hover:bg-rose-100 disabled:opacity-50 dark:hover:bg-rose-900/30"
+                title="删除"
+                aria-label="删除"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
               {canRetry && (
                 <button
                   type="button"
@@ -171,14 +159,13 @@ export function JobCard({
                 </button>
               )}
             </div>
-          )}
 
           {canRetry && (
             <button
               type="button"
               onClick={handleRetry}
               disabled={retryJob.isPending}
-              className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-gemini-700 shadow-sm backdrop-blur hover:bg-white disabled:opacity-50 dark:bg-slate-900/90 dark:text-gemini-300"
+              className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-gemini-700 shadow-sm backdrop-blur hover:bg-white disabled:opacity-50 dark:bg-slate-900/90 dark:text-gemini-300"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="23 4 23 10 17 10" />
@@ -190,102 +177,10 @@ export function JobCard({
         </div>
       </Link>
 
-      <div className="px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <Link
-            to={`/jobs/${job.id}`}
-            className="min-w-0 flex-1 truncate text-sm font-medium hover:text-gemini-600"
-            title={job.project_name || '(未命名)'}
-          >
-            {job.project_name || '(未命名)'}
-          </Link>
-          <StatusPill status={job.status} />
-        </div>
-
-        <div className="mt-1 flex items-center gap-2">
-          <p
-            className="min-w-0 flex-1 truncate text-xs text-slate-400 dark:text-slate-500"
-            title={metaText}
-          >
-            {metaText}
-          </p>
-          <QueueBadge position={job.queue_position} />
-          <div className="relative shrink-0" ref={menuRef}>
-            <button
-              type="button"
-              onClick={handleMenuToggle}
-              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-              aria-label="更多操作"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="5" cy="12" r="2" />
-                <circle cx="12" cy="12" r="2" />
-                <circle cx="19" cy="12" r="2" />
-              </svg>
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 min-w-[120px] rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                {isDone && hasDocx && (
-                  <Link
-                    to={`/jobs/${job.id}/edit`}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setMenuOpen(false)
-                    }}
-                  >
-                    预览与修改
-                  </Link>
-                )}
-                {showDownload && (
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    下载 DOCX
-                  </button>
-                )}
-                {canRetry && (
-                  <button
-                    type="button"
-                    onClick={handleRetry}
-                    disabled={retryJob.isPending}
-                    className="block w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    重试
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleteJob.isPending}
-                  className="block w-full px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-900/20"
-                >
-                  删除
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {promptSummary && (
-          <p
-            className="mt-1 truncate text-xs text-slate-400/90 dark:text-slate-500"
-            title={job.prompt}
-          >
-            {promptSummary}
-          </p>
-        )}
-
-        {showErr && (
-          <p
-            className="mt-1 truncate text-xs text-rose-500/80 dark:text-rose-400/80"
-            title={errText}
-          >
-            {displayErr}
-          </p>
-        )}
+      <div className={JOB_CARD_FOOTER_CLASS}>
+        <JobCardTitleTip job={job} displayErr={displayErr} />
+        <StatusPill status={job.status} />
+        <QueueBadge position={job.queue_position} />
       </div>
     </article>
   )

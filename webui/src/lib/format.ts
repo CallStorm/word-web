@@ -110,6 +110,74 @@ export function fmtJobMetaLine(
   return `${dateText} · ${durationLabel}${pagePart}`
 }
 
+type JobTipInput = {
+  status: string
+  created_at: string | null
+  updated_at?: string | null
+  prompt?: string | null
+  error_message?: string | null
+  cost_usd?: number | null
+  options?: { section_count?: number } | null
+}
+
+/** Label + value for job card hover tooltip duration row. */
+export function fmtJobDurationLabel(
+  job: Pick<JobTipInput, 'status' | 'created_at' | 'updated_at'>,
+  now: Date = new Date(),
+): { label: string; value: string } {
+  const elapsedMs = jobElapsedMs(job, now)
+  const isActive = job.status === 'queued' || job.status === 'running' || job.status === 'paused'
+  const isFailedOrCancelled = job.status === 'failed' || job.status === 'cancelled'
+
+  let value: string
+  if (isFailedOrCancelled && (elapsedMs == null || elapsedMs < FAST_FAIL_MS)) {
+    value = '未完成'
+  } else if (elapsedMs == null) {
+    value = '—'
+  } else {
+    value = fmtDuration(elapsedMs)
+  }
+
+  if (isActive) return { label: '已用时', value }
+  if (isFailedOrCancelled && value === '未完成') return { label: '耗时', value }
+  return { label: '耗时', value }
+}
+
+/** Structured lines for job card title hover tooltip. */
+export function buildJobCardTipLines(
+  job: JobTipInput,
+  opts?: { sharedErrorCount?: number; displayErr?: string | null },
+  now: Date = new Date(),
+): { label: string; value: string; tone?: 'error' | 'muted' }[] {
+  const lines: { label: string; value: string; tone?: 'error' | 'muted' }[] = []
+
+  lines.push({ label: '创建时间', value: fmtDateTime(job.created_at) })
+
+  const duration = fmtJobDurationLabel(job, now)
+  lines.push({ label: duration.label, value: duration.value })
+
+  const sectionCount = job.options?.section_count
+  if (sectionCount != null) {
+    lines.push({ label: '节数', value: `${sectionCount} 节` })
+  }
+
+  if (job.cost_usd != null) {
+    lines.push({ label: '费用', value: fmtCost(job.cost_usd), tone: 'muted' })
+  }
+
+  const prompt = job.prompt?.trim()
+  if (prompt) {
+    lines.push({ label: 'Prompt', value: prompt })
+  }
+
+  const err = opts?.displayErr?.trim()
+  if (err) {
+    lines.push({ label: '失败原因', value: err, tone: 'error' })
+  }
+
+  return lines
+}
+
 export function fmtCost(usd: number | null | undefined): string {
   if (usd == null) return '—'
   return `$${Number(usd).toFixed(3)}`

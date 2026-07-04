@@ -9,11 +9,14 @@ from unittest.mock import Mock, patch
 from backend.runner.preview import (
     DOCUMENT_HTML_NAME,
     DOCUMENT_OUTLINE_NAME,
+    PREVIEW_SCREENSHOT_HEIGHT,
+    PREVIEW_SCREENSHOT_WIDTH,
     check_figure_adjacency_warnings,
     find_document_html,
     find_document_outline,
     generate_docx_html,
     generate_docx_outline,
+    generate_docx_previews,
     load_document_outline,
 )
 
@@ -93,6 +96,29 @@ class PreviewHtmlTests(unittest.TestCase):
         ):
             warnings = check_figure_adjacency_warnings(FIXTURE_DOCX)
         self.assertEqual(warnings, [])
+
+    def test_generate_docx_previews_uses_a4_portrait_dimensions(self) -> None:
+        if not FIXTURE_DOCX.is_file():
+            self.skipTest("fixture docx missing")
+        cover = self.preview_dir / "page-1.png"
+        cover.unlink(missing_ok=True)
+
+        def fake_run(cmd, **kwargs):
+            out_idx = cmd.index("-o") + 1
+            Path(cmd[out_idx]).write_bytes(b"\x89PNG")
+            return Mock(returncode=0)
+
+        with patch("backend.runner.preview.subprocess.run", side_effect=fake_run) as run_mock:
+            with patch("backend.runner.preview.shutil.which", return_value="/usr/bin/officecli"):
+                ok = generate_docx_previews(FIXTURE_ROOT, FIXTURE_DOCX)
+            self.assertTrue(ok)
+            cmd = run_mock.call_args[0][0]
+            self.assertIn("--screenshot-width", cmd)
+            self.assertIn(str(PREVIEW_SCREENSHOT_WIDTH), cmd)
+            self.assertIn("--screenshot-height", cmd)
+            self.assertIn(str(PREVIEW_SCREENSHOT_HEIGHT), cmd)
+            self.assertEqual(PREVIEW_SCREENSHOT_WIDTH, 840)
+            self.assertEqual(PREVIEW_SCREENSHOT_HEIGHT, 1188)
 
 
 if __name__ == "__main__":

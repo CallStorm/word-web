@@ -12,6 +12,9 @@ from typing import Any
 log = logging.getLogger("backend.runner.preview")
 
 MAX_PREVIEW_PAGES = 20
+# A4 portrait ratio for Word cover thumbnails (210:297).
+PREVIEW_SCREENSHOT_WIDTH = 840
+PREVIEW_SCREENSHOT_HEIGHT = 1188
 DOCUMENT_HTML_NAME = "document.html"
 DOCUMENT_OUTLINE_NAME = "document-outline.json"
 _PAGE_RE = re.compile(r"^page-(\d+)\.png$", re.IGNORECASE)
@@ -279,6 +282,10 @@ def generate_docx_previews(
                     str(page),
                     "--render",
                     "html",
+                    "--screenshot-width",
+                    str(PREVIEW_SCREENSHOT_WIDTH),
+                    "--screenshot-height",
+                    str(PREVIEW_SCREENSHOT_HEIGHT),
                     "-o",
                     str(out),
                 ],

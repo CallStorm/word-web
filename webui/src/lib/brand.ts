@@ -1,1 +1,1 @@
-export const APP_NAME = 'SlideForge'
+export const APP_NAME = 'WordForge'
