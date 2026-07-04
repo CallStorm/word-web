@@ -58,8 +58,12 @@ def templates_dir_for(user_id: str) -> Path:
     return user_dir(user_id) / "templates"
 
 
+def template_dir_for(user_id: str, template_id: str) -> Path:
+    return templates_dir_for(user_id) / template_id
+
+
 def template_path_for(user_id: str, template_id: str) -> Path:
-    return templates_dir_for(user_id) / template_id / "template.docx"
+    return template_dir_for(user_id, template_id) / "template.docx"
 
 
 def builtin_templates_dir() -> Path:

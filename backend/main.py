@@ -20,6 +20,7 @@ from backend.db.migrations import (
     migrate_v5_to_v6,
     migrate_v6_to_v7,
     migrate_v7_to_v8,
+    migrate_v8_to_v9,
 )
 from backend.db.session import init_db
 from backend.paths import DATA_DIR
@@ -51,6 +52,8 @@ async def lifespan(app: FastAPI):
         log.warning("backend migrate_v5_to_v6 done; added jobs.options_json")
     if migrate_v7_to_v8():
         log.warning("backend migrate_v7_to_v8 done; word-web schema")
+    if migrate_v8_to_v9():
+        log.warning("backend migrate_v8_to_v9 done; template slots columns")
     init_db()
     seed_default_admin()
     DATA_DIR.mkdir(parents=True, exist_ok=True)

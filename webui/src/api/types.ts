@@ -21,15 +21,33 @@ export interface JobUpload {
   size: number | null
 }
 
+export interface TemplatePlaceholder {
+  key: string
+  hint?: string | null
+}
+
+export interface TemplateSlot {
+  key: string
+  label: string
+  hint?: string | null
+  sample_text?: string | null
+  data_path?: string | null
+  order: number
+  source?: string
+}
+
 export interface Template {
   id: string
   name: string
   category: string
   description: string | null
   placeholder_count: number
-  placeholders: string[]
+  placeholders: TemplatePlaceholder[] | string[]
+  slots: TemplateSlot[]
   page_count: number
   is_builtin: boolean
+  cover_url: string | null
+  document_html_url: string | null
   preview_url: string | null
   created_at: string | null
 }

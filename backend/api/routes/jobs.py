@@ -70,11 +70,22 @@ async def create_job(
     citation_style: Annotated[str | None, Form()] = None,
     core_topic: Annotated[str | None, Form()] = None,
     outline: Annotated[str, Form()] = "",
+    template_data: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],
 ) -> dict:
     outline_list = [s.strip() for s in outline.split("\n") if s.strip()] if outline else None
     if generation_mode == "template" and not template_id:
         raise HTTPException(422, "template_id required for template mode")
+
+    parsed_template_data: dict[str, str] | None = None
+    if template_data.strip():
+        try:
+            raw = json.loads(template_data)
+        except json.JSONDecodeError as e:
+            raise HTTPException(422, "template_data must be valid JSON object") from e
+        if not isinstance(raw, dict):
+            raise HTTPException(422, "template_data must be a JSON object")
+        parsed_template_data = {str(k): str(v) for k, v in raw.items()}
 
     try:
         opts = job_options_from_form(
@@ -91,6 +102,7 @@ async def create_job(
             citation_style=citation_style,
             core_topic=core_topic,
             outline=outline_list,
+            template_data=parsed_template_data,
         )
     except ValidationError as e:
         raise HTTPException(422, detail=e.errors()) from e
@@ -119,6 +131,12 @@ async def create_job(
 
     uploads_dir = uploads_dir_for(user.id, job_id)
     ensure_data_dirs(user.id, job_id)
+    project_root = project_root_for(user.id, job_id)
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    if parsed_template_data:
+        data_path = project_root / "data.json"
+        data_path.write_text(json.dumps(parsed_template_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     upload_paths: list[str] = []
     total = 0

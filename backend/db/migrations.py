@@ -171,3 +171,20 @@ def migrate_v7_to_v8() -> bool:
     init_db()
     return changed
 
+
+def migrate_v8_to_v9() -> bool:
+    """Word-web: template slots_json + document_html_path."""
+    if not _has_users_table():
+        return False
+    changed = False
+    if inspect(engine).has_table("templates"):
+        if not _has_column("templates", "slots_json"):
+            with engine.begin() as conn:
+                conn.exec_driver_sql("ALTER TABLE templates ADD COLUMN slots_json TEXT NULL")
+            changed = True
+        if not _has_column("templates", "document_html_path"):
+            with engine.begin() as conn:
+                conn.exec_driver_sql("ALTER TABLE templates ADD COLUMN document_html_path TEXT NULL")
+            changed = True
+    return changed
+

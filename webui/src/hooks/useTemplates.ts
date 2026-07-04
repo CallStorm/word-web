@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import type { Template, TemplatesListResponse } from '../api/types'
+import type { Template, TemplateSlot, TemplatesListResponse } from '../api/types'
 
 export const TEMPLATES_KEY = ['templates'] as const
 export const templateKey = (id: string) => ['template', id] as const
@@ -30,7 +30,11 @@ export function useUploadTemplate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (fd: FormData) =>
-      api<{ id: string; name: string; placeholder_count: number }>('POST', '/api/templates', fd),
+      api<{ id: string; name: string; placeholder_count: number; cover_url?: string | null }>(
+        'POST',
+        '/api/templates',
+        fd,
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TEMPLATES_KEY })
     },
@@ -56,6 +60,39 @@ export function useDeleteTemplate() {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: TEMPLATES_KEY })
       qc.removeQueries({ queryKey: templateKey(id) })
+    },
+  })
+}
+
+export function useForkTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api<Template>('POST', `/api/templates/${id}/fork`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY })
+    },
+  })
+}
+
+export function useSaveTemplateSlots() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, slots, name }: { id: string; slots: TemplateSlot[]; name?: string }) =>
+      api<Template>('PUT', `/api/templates/${id}/slots`, { slots, name }),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY })
+      qc.invalidateQueries({ queryKey: templateKey(id) })
+    },
+  })
+}
+
+export function useSyncTemplatePreview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api<Template>('POST', `/api/templates/${id}/preview/sync`),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY })
+      qc.invalidateQueries({ queryKey: templateKey(id) })
     },
   })
 }

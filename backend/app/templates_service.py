@@ -8,7 +8,10 @@ import subprocess
 import uuid
 from pathlib import Path
 
-from backend.paths import PROJECT_ROOT, builtin_templates_dir, template_path_for
+from backend.app.template_preview import sync_template_previews
+from backend.app.template_slots import parse_slots_json, slots_from_placeholders
+from backend.paths import PROJECT_ROOT, builtin_templates_dir, template_dir_for, template_path_for, templates_dir_for
+from backend.runner.preview import list_slides
 
 log = logging.getLogger("backend.templates")
 
@@ -65,9 +68,82 @@ def seed_builtin_templates_db(session) -> None:
         row.file_path = str(src)
         row.placeholder_count = len(placeholders)
         row.placeholders_json = json.dumps(placeholders, ensure_ascii=False)
-        row.page_count = 1
-        row.preview_path = None
+        if not row.slots_json:
+            row.slots_json = json.dumps(slots_from_placeholders(placeholders), ensure_ascii=False)
+        row.page_count = max(1, len(list_slides(src.parent)) or 1)
+        if not row.preview_path or not Path(row.preview_path).is_file():
+            try:
+                apply_preview_paths(row, src)
+            except Exception:
+                log.exception("failed to generate preview for builtin template %s", tid)
         session.merge(row)
+
+
+def catalog_slots_for_builtin(template_id: str) -> list[dict]:
+    catalog_path = PROJECT_ROOT / "webui" / "src" / "lib" / "templateCatalog.json"
+    if not catalog_path.is_file():
+        return []
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    for entry in catalog.get("templates", []):
+        if entry.get("builtin_id") == template_id:
+            keys = entry.get("placeholders") or []
+            return slots_from_placeholders([{"key": k} for k in keys])
+    return []
+
+
+def apply_preview_paths(template, docx: Path) -> None:
+    cover, html = sync_template_previews(docx)
+    template.preview_path = cover
+    template.document_html_path = html
+
+
+def fork_template(session, *, source: "Template", user_id: str) -> "Template":
+    from backend.models import Template
+
+    new_id = str(uuid.uuid4())
+    tdir = template_dir_for(user_id, new_id)
+    tdir.mkdir(parents=True, exist_ok=True)
+    dest = template_path_for(user_id, new_id)
+    src_path = Path(source.file_path)
+    if source.is_builtin:
+        src_path = Path(source.file_path)
+    elif source.user_id:
+        src_path = template_path_for(source.user_id, source.id)
+    if not src_path.is_file():
+        raise FileNotFoundError("template file missing")
+    shutil.copy2(src_path, dest)
+
+    prev_slots = parse_slots_json(source.slots_json)
+    if not prev_slots and source.is_builtin:
+        prev_slots = catalog_slots_for_builtin(source.id)
+    if not prev_slots and source.placeholders_json:
+        try:
+            placeholders = json.loads(source.placeholders_json)
+            prev_slots = slots_from_placeholders(placeholders)
+        except json.JSONDecodeError:
+            prev_slots = []
+
+    meta = analyze_template_file(dest)
+    placeholders = meta.get("placeholders", [])
+    row = Template(
+        id=new_id,
+        user_id=user_id,
+        name=f"{source.name}（副本）",
+        category=source.category,
+        description=source.description,
+        file_path=str(dest),
+        placeholder_count=len(placeholders),
+        placeholders_json=json.dumps(placeholders, ensure_ascii=False),
+        slots_json=json.dumps(prev_slots, ensure_ascii=False) if prev_slots else None,
+        page_count=source.page_count or 1,
+        is_builtin=False,
+    )
+    apply_preview_paths(row, dest)
+    session.add(row)
+    return row
 
 
 def resolve_template_docx(user_id: str | None, template_id: str | None) -> Path | None:

@@ -63,6 +63,7 @@ class JobOptions(BaseModel):
     core_topic: str | None = Field(default=None, max_length=2000)
     outline: list[str] | None = None
     revision_items: list[RevisionItem] | None = None
+    template_data: dict[str, str] | None = None
 
 
 DEFAULT_JOB_OPTIONS = JobOptions()
@@ -112,6 +113,7 @@ def job_options_from_form(
     citation_style: str | None = None,
     core_topic: str | None = None,
     outline: list[str] | None = None,
+    template_data: dict[str, str] | None = None,
 ) -> JobOptions:
     return JobOptions(
         generation_mode=generation_mode,  # type: ignore[arg-type]
@@ -127,6 +129,7 @@ def job_options_from_form(
         citation_style=citation_style,  # type: ignore[arg-type]
         core_topic=core_topic,
         outline=outline,
+        template_data=template_data,
     )
 
 
@@ -154,5 +157,10 @@ def format_options_for_prompt(opts: JobOptions) -> str:
         for item in opts.outline:
             lines.append(f"  - {item}")
     if opts.generation_mode == "template":
-        lines.append("- 模板模式：保持模板结构，仅替换内容（参见 template-rules.md）")
+        lines.append("- 模板模式：保持模板结构，仅替换内容（参见 template-merge.md）")
+        if opts.template_data:
+            lines.append("- 用户已填写模板变量（见 TEMPLATE_DATA_PATH / data.json），优先 officecli merge")
+            for key, val in opts.template_data.items():
+                preview = val if len(val) <= 80 else f"{val[:77]}…"
+                lines.append(f"  - {key}: {preview}")
     return "\n".join(lines)

@@ -115,6 +115,14 @@ def build_initial_prompt(
         parts.append(f"JOB_ID: {job_id}")
     if template_path:
         parts.append(f"TEMPLATE_PATH: {template_path}")
+    template_data_path = None
+    if options is not None and getattr(options, "template_data", None):
+        template_data_path = str(Path(project_root_str) / "data.json")
+        parts.append(f"TEMPLATE_DATA_PATH: {template_data_path}")
+        parts.append(
+            "若 TEMPLATE_DATA_PATH 存在：优先走 template-merge（officecli merge），"
+            "无需 AI 推断已有字段；仅对缺失字段从 prompt 补充。"
+        )
     parts.extend([
         "",
         "重要约束：",

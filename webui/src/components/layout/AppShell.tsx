@@ -41,7 +41,7 @@ export function AppShell() {
             to="/templates"
             className="rounded-sm border border-office-border px-3 py-1.5 text-office-muted hover:bg-[#edebe9] dark:border-[#3b3a39] dark:text-[#c8c6c4] dark:hover:bg-[#3b3a39]"
           >
-            模板
+            模板管理
           </Link>
           {isAdmin() && (
             <Link
