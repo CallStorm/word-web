@@ -79,29 +79,6 @@ class Job(Base):
 
 
 
-
-class Template(Base):
-    """用户或系统 Word 模板。"""
-    __tablename__ = "templates"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
-    )
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
-    category: Mapped[str] = mapped_column(String(32), nullable=False, default="custom")
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    file_path: Mapped[str] = mapped_column(Text, nullable=False)
-    placeholder_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    placeholders_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    slots_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    page_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    preview_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    document_html_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-
-
 class Event(Base):
     """一次 job 的原始事件流（供 SSE 续传 + 调试回放）。"""
     __tablename__ = "events"

@@ -54,22 +54,6 @@ def project_root_for(user_id: str, job_id: str) -> Path:
     return user_dir(user_id) / "projects" / job_id
 
 
-def templates_dir_for(user_id: str) -> Path:
-    return user_dir(user_id) / "templates"
-
-
-def template_dir_for(user_id: str, template_id: str) -> Path:
-    return templates_dir_for(user_id) / template_id
-
-
-def template_path_for(user_id: str, template_id: str) -> Path:
-    return template_dir_for(user_id, template_id) / "template.docx"
-
-
-def builtin_templates_dir() -> Path:
-    return DATA_DIR / "templates" / "builtin"
-
-
 def ensure_data_dirs(user_id: str, job_id: str) -> None:
     """建好 uploads/<job_id> 与 projects/<job_id>。"""
     uploads_dir_for(user_id, job_id).mkdir(parents=True, exist_ok=True)

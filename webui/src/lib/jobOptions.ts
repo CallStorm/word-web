@@ -1,5 +1,5 @@
 export type JobLanguage = 'zh' | 'en'
-export type GenerationMode = 'freeform' | 'template'
+export type GenerationMode = 'freeform'
 export type JobScenario =
   | 'report'
   | 'contract'
@@ -20,7 +20,6 @@ export type CitationStyle = 'APA' | 'IEEE' | 'MLA' | 'Chicago'
 
 export interface JobOptions {
   generation_mode: GenerationMode
-  template_id: string | null
   language: JobLanguage
   scenario: JobScenario
   audience: JobAudience
@@ -32,7 +31,6 @@ export interface JobOptions {
   citation_style: CitationStyle | null
   core_topic: string | null
   outline: string[] | null
-  template_data?: Record<string, string> | null
   generation_hint?: string | null
 }
 
@@ -48,7 +46,6 @@ export const LANGUAGE_OPTIONS: OptionItem<JobLanguage>[] = [
 
 export const GENERATION_MODE_OPTIONS: OptionItem<GenerationMode>[] = [
   { value: 'freeform', label: '自由撰写' },
-  { value: 'template', label: '模板填充' },
 ]
 
 export const SCENARIO_OPTIONS: OptionItem<JobScenario>[] = [
@@ -91,7 +88,6 @@ export const CITATION_STYLE_OPTIONS: OptionItem<CitationStyle>[] = [
 
 export const DEFAULT_JOB_OPTIONS: JobOptions = {
   generation_mode: 'freeform',
-  template_id: null,
   language: 'zh',
   scenario: 'report',
   audience: 'general',

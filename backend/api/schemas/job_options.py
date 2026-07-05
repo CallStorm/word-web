@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationError
 
 Language = Literal["zh", "en"]
-GenerationMode = Literal["freeform", "template"]
+GenerationMode = Literal["freeform"]
 Scenario = Literal["report", "contract", "letter", "memo", "academic", "general"]
 Audience = Literal["general", "executive", "team", "client", "expert", "student"]
 Tone = Literal["formal", "casual", "technical", "professional", "concise"]
@@ -50,7 +50,6 @@ class RevisionRequest(BaseModel):
 
 class JobOptions(BaseModel):
     generation_mode: GenerationMode = "freeform"
-    template_id: str | None = None
     language: Language = "zh"
     scenario: Scenario = "report"
     audience: Audience = "general"
@@ -63,8 +62,8 @@ class JobOptions(BaseModel):
     core_topic: str | None = Field(default=None, max_length=2000)
     outline: list[str] | None = None
     revision_items: list[RevisionItem] | None = None
-    template_data: dict[str, str] | None = None
     generation_hint: str | None = Field(default=None, max_length=2000)
+    job_kind: Literal["agent"] = "agent"
 
 
 DEFAULT_JOB_OPTIONS = JobOptions()
@@ -75,9 +74,9 @@ _LANGUAGE = {
 }
 _SCENARIO = {
     "report": ("工作报告", "officecli load_skill word"),
-    "contract": ("合同", "template-merge 优先"),
+    "contract": ("合同", "officecli load_skill word"),
     "letter": ("公函/信件", "officecli load_skill word"),
-    "memo": ("会议纪要", "template-merge 优先"),
+    "memo": ("会议纪要", "officecli load_skill word"),
     "academic": ("学术论文", "officecli load_skill academic-paper"),
     "general": ("通用文档", "officecli load_skill word"),
 }
@@ -102,7 +101,6 @@ def parse_job_options(raw: str | None) -> JobOptions:
 def job_options_from_form(
     *,
     generation_mode: str = "freeform",
-    template_id: str | None = None,
     language: str = "zh",
     scenario: str = "report",
     audience: str = "general",
@@ -114,12 +112,10 @@ def job_options_from_form(
     citation_style: str | None = None,
     core_topic: str | None = None,
     outline: list[str] | None = None,
-    template_data: dict[str, str] | None = None,
     generation_hint: str | None = None,
 ) -> JobOptions:
     return JobOptions(
         generation_mode=generation_mode,  # type: ignore[arg-type]
-        template_id=template_id,
         language=language,  # type: ignore[arg-type]
         scenario=scenario,  # type: ignore[arg-type]
         audience=audience,  # type: ignore[arg-type]
@@ -131,7 +127,6 @@ def job_options_from_form(
         citation_style=citation_style,  # type: ignore[arg-type]
         core_topic=core_topic,
         outline=outline,
-        template_data=template_data,
         generation_hint=generation_hint,
     )
 
@@ -139,8 +134,6 @@ def job_options_from_form(
 def format_options_for_prompt(opts: JobOptions) -> str:
     lines = ["Word 生成要求（请严格遵循）：", ""]
     lines.append(f"- 生成模式：{opts.generation_mode}")
-    if opts.template_id:
-        lines.append(f"- 模板 ID：{opts.template_id}")
     lang_label, lang_rule = _LANGUAGE[opts.language]
     scen_label, scen_hint = _SCENARIO[opts.scenario]
     lines.append(f"- 语言：{lang_label}（{lang_rule}）")
@@ -159,13 +152,6 @@ def format_options_for_prompt(opts: JobOptions) -> str:
         lines.append("- 用户大纲：")
         for item in opts.outline:
             lines.append(f"  - {item}")
-    if opts.generation_mode == "template":
-        lines.append("- 模板模式：保持模板结构，仅替换内容（参见 template-merge.md）")
-        if opts.template_data:
-            lines.append("- 用户已填写模板变量（见 TEMPLATE_DATA_PATH / data.json），优先 officecli merge")
-            for key, val in opts.template_data.items():
-                preview = val if len(val) <= 80 else f"{val[:77]}…"
-                lines.append(f"  - {key}: {preview}")
     if opts.generation_hint:
         lines.append(f"- 生成微调：{opts.generation_hint}")
     return "\n".join(lines)

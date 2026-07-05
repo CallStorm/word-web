@@ -6,7 +6,6 @@ import logging
 import threading
 
 from backend.api.schemas.job_options import parse_job_options
-from backend.app.templates_service import resolve_template_docx
 from backend.config import get_runtime_config
 from backend.db.session import SessionLocal, init_db
 from backend.models import Job as DbJob
@@ -152,8 +151,6 @@ async def run_job(job_id: str, prompt: str, project_name: str, upload_paths: lis
             return
         user_id = j.user_id
         job_options = parse_job_options(j.options_json)
-        template_docx = resolve_template_docx(user_id, j.template_id or job_options.template_id)
-        template_path = str(template_docx) if template_docx else None
         if not user_id:
             _enqueue_event(job_id, "error", {"message": "job has no user_id (legacy?)"})
             return
@@ -212,7 +209,6 @@ async def run_job(job_id: str, prompt: str, project_name: str, upload_paths: lis
             require_confirm=False,
             job_id=job_id,
             options=job_options,
-            template_path=template_path,
         )
         # 写 job 表
         with SessionLocal() as s:

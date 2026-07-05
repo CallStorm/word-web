@@ -649,7 +649,6 @@ function JobOptionsPanel({ job }: { job: { project_name: string | null; prompt: 
             <FieldList
               items={[
                 { label: '生成模式', value: optionLabelFrom(GENERATION_MODE_OPTIONS, o.generation_mode) },
-                { label: '模板 ID', value: o.template_id },
                 { label: '语言', value: optionLabelFrom(LANGUAGE_OPTIONS, o.language) },
                 { label: '场景', value: optionLabelFrom(SCENARIO_OPTIONS, o.scenario) },
                 { label: '受众', value: optionLabelFrom(AUDIENCE_OPTIONS, o.audience) },

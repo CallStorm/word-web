@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.api.deps import (
@@ -35,6 +35,7 @@ from backend.runner.preview import (
     generate_docx_outline,
     list_slides,
     load_document_outline,
+    read_document_html_content,
 )
 from backend.runtime import (
     cancel_active,
@@ -58,7 +59,6 @@ async def create_job(
     prompt: Annotated[str, Form(min_length=1, max_length=20000)],
     project_name: Annotated[str | None, Form()] = None,
     generation_mode: Annotated[str, Form()] = "freeform",
-    template_id: Annotated[str | None, Form()] = None,
     language: Annotated[str, Form()] = "zh",
     scenario: Annotated[str, Form()] = "report",
     audience: Annotated[str, Form()] = "general",
@@ -70,28 +70,17 @@ async def create_job(
     citation_style: Annotated[str | None, Form()] = None,
     core_topic: Annotated[str | None, Form()] = None,
     outline: Annotated[str, Form()] = "",
-    template_data: Annotated[str, Form()] = "",
     generation_hint: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],
 ) -> dict:
-    outline_list = [s.strip() for s in outline.split("\n") if s.strip()] if outline else None
-    if generation_mode == "template" and not template_id:
-        raise HTTPException(422, "template_id required for template mode")
+    if generation_mode != "freeform":
+        raise HTTPException(422, "only freeform generation_mode is supported")
 
-    parsed_template_data: dict[str, str] | None = None
-    if template_data.strip():
-        try:
-            raw = json.loads(template_data)
-        except json.JSONDecodeError as e:
-            raise HTTPException(422, "template_data must be valid JSON object") from e
-        if not isinstance(raw, dict):
-            raise HTTPException(422, "template_data must be a JSON object")
-        parsed_template_data = {str(k): str(v) for k, v in raw.items()}
+    outline_list = [s.strip() for s in outline.split("\n") if s.strip()] if outline else None
 
     try:
         opts = job_options_from_form(
             generation_mode=generation_mode,
-            template_id=template_id,
             language=language,
             scenario=scenario,
             audience=audience,
@@ -103,7 +92,6 @@ async def create_job(
             citation_style=citation_style,
             core_topic=core_topic,
             outline=outline_list,
-            template_data=parsed_template_data,
             generation_hint=generation_hint.strip() or None,
         )
     except ValidationError as e:
@@ -127,7 +115,6 @@ async def create_job(
             status="queued",
             require_confirm=False,
             options_json=options_json,
-            template_id=template_id,
         ))
         s.commit()
 
@@ -135,10 +122,6 @@ async def create_job(
     ensure_data_dirs(user.id, job_id)
     project_root = project_root_for(user.id, job_id)
     project_root.mkdir(parents=True, exist_ok=True)
-
-    if parsed_template_data:
-        data_path = project_root / "data.json"
-        data_path.write_text(json.dumps(parsed_template_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     upload_paths: list[str] = []
     total = 0
@@ -500,7 +483,7 @@ async def download_document_html(job_id: str, user: CurrentUser):
         html = _verified_document_html(j, project_dir)
         if not html:
             raise HTTPException(404, "document html preview not ready")
-        return FileResponse(html, media_type="text/html; charset=utf-8")
+        return HTMLResponse(read_document_html_content(html))
 
 
 def _load_verified_document_outline(j: Job, project_dir: Path | None) -> list[dict]:
