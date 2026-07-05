@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import threading
 import uuid
 from pathlib import Path
 
 from backend.config import build_claude_env, get_runtime_config
+from backend.runner.constants import WORDMASTER
 from backend.runner.errors import humanize_error
 
 log = logging.getLogger("backend.runner.docker")
@@ -162,7 +164,16 @@ def _build_docker_run_cmd(
         cmd.extend(["-e", f"JOB_OPTIONS_JSON={job_options_json}"])
     if template_path:
         cmd.extend(["-e", f"TEMPLATE_PATH={template_path}"])
-    cmd.extend(["-e", f"WORK_ROOT={mount_path}/projects/{job_id or ''}"])
+    work_root = f"{mount_path}/projects/{job_id or ''}"
+    cmd.extend(["-e", f"WORK_ROOT={work_root}"])
+    if job_id:
+        cmd.extend(["-e", f"UPLOADS_DIR={mount_path}/uploads/{job_id}/"])
+
+    if os.getenv("WORD_WEB_MOUNT_SKILLS", "").lower() in ("1", "true", "yes"):
+        host_skills = WORDMASTER / "skills"
+        if host_skills.is_dir():
+            cmd.extend(["-v", f"{host_skills}:/opt/word-master/skills:ro"])
+            log.info("mounting host skills from %s", host_skills)
 
     cmd.append(cfg.docker.image)
     return cmd, mount_path, host_prefix

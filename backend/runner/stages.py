@@ -8,11 +8,10 @@ from pathlib import Path
 STAGE_RULES: list[tuple[callable, str]] = [
     (lambda c, f, w: "source_to_md" in c or ("officecli" in c and "view" in c and "text" in c), "1 解析素材"),
     (lambda c, f, w: "outline.md" in f or "load_skill" in c, "2 规划大纲"),
-    (lambda c, f, w: "analyze_template" in c or ("dump" in c and "officecli" in c) or ("view" in c and "outline" in c), "3 分析模板"),
-    (lambda c, f, w: "officecli merge" in c or " merge " in c, "4 模板合并"),
-    (lambda c, f, w: "officecli add" in c or "officecli set" in c or "officecli batch" in c or "officecli create" in c, "5 文档构建"),
-    (lambda c, f, w: "view" in c and "issues" in c or "validate" in c, "6 质量检查"),
-    (lambda c, f, w: "exports/" in f and ".docx" in f or "officecli close" in c, "7 导出完成"),
+    (lambda c, f, w: "view" in c and "outline" in c, "3 分析结构"),
+    (lambda c, f, w: "officecli add" in c or "officecli set" in c or "officecli batch" in c or "officecli create" in c, "4 文档构建"),
+    (lambda c, f, w: "view" in c and "issues" in c or "validate" in c, "5 质量检查"),
+    (lambda c, f, w: "exports/" in f and ".docx" in f or "officecli close" in c, "6 导出完成"),
 ]
 
 OUTLINE_RE = re.compile(r"outline\.md$", re.IGNORECASE)
@@ -96,44 +95,31 @@ def build_initial_prompt(
         project_root_str = str(project_root).replace(host_prefix, mount_path, 1)
         if upload_paths:
             upload_paths = [p.replace(host_prefix, mount_path) for p in upload_paths]
-        if template_path:
-            template_path = template_path.replace(host_prefix, mount_path, 1)
     else:
         project_root_str = str(project_root)
 
     parts = [
-        "请先用 read_file 读取 skills/word-master/SKILL.md，然后严格按其工作流执行，"
-        "为以下内容生成一份 Word 文档（.docx）。",
+        "请加载 skills/word-master/SKILL.md，按其中 pipeline 生成 Word 文档（.docx）。",
+        "构建标准以 skills/officecli-docx/SKILL.md 为准，必须完成 Delivery Gate。",
+        "scenario=academic 时执行 officecli load_skill academic-paper，否则 officecli load_skill word。",
         "",
         "## 运行模式",
-        "web（参见 skills/word-master/references/web-mode.md）",
+        "web（路径约定见 skills/word-master/references/web-mode.md）",
         "",
-        f"项目目录名使用: {project_name}",
+        f"项目目录名: {project_name}",
         f"WORK_ROOT: {project_root_str}",
     ]
     if job_id:
         parts.append(f"JOB_ID: {job_id}")
-    if template_path:
-        parts.append(f"TEMPLATE_PATH: {template_path}")
-    template_data_path = None
-    if options is not None and getattr(options, "template_data", None):
-        template_data_path = str(Path(project_root_str) / "data.json")
-        parts.append(f"TEMPLATE_DATA_PATH: {template_data_path}")
-        parts.append(
-            "若 TEMPLATE_DATA_PATH 存在：优先走 template-merge（officecli merge），"
-            "无需 AI 推断已有字段；仅对缺失字段从 prompt 补充。"
-        )
     parts.extend([
         "",
-        "重要约束：",
-        "1. 所有产物写入 WORK_ROOT，最终 .docx 必须在 exports/ 目录下。",
-        "2. 先运行 source_to_md.py 解析上传素材，再写 outline.md，再构建文档。",
-        "3. 使用 officecli 操作文档；不确定语法时运行 officecli help docx。",
-        "4. 构建文档时必须为文档标题设置 style=Title，章节设置 style=Heading1，正文设置 style=Normal；"
-        "禁止用 Normal+加粗代替标题；交付前用 officecli view outline 自检。",
-        "5. 交付前必须 officecli view issues 和 officecli validate。",
-        "6. 完成导出后运行 bash skills/word-master/scripts/generate_preview.sh 生成 .preview/page-*.png。",
-        "7. 完成导出后明确告知 exports 下生成的 .docx 路径。",
+        "交付契约：",
+        "- 产物写入 WORK_ROOT；最终 .docx 在 exports/",
+        "- 封面、目录、表格、图表：仅当用户 prompt 明确要求时添加",
+        "- session 内用 officecli 增量构建；handoff 前 officecli close",
+        "- 预览（封面 PNG / HTML / 大纲）由 host 在 finalize 后自动生成，Agent 勿运行预览脚本",
+        "- 明确报告 exports/*.docx 路径",
+        "- 章节用 Heading1，小节用 Heading2；若用户提供 outline，每项映射为一个 Heading1",
         "",
     ])
     if upload_paths:

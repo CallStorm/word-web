@@ -6,15 +6,14 @@ import type { RevisionsListResponse, SseEvent } from '../api/types'
 import { useJob, useDeleteJob, useRetryJob } from '../hooks/useJobs'
 import { useJobEvents } from '../hooks/useJobEvents'
 import { StatusPill } from '../components/jobs/StatusPill'
-import { fmtCost, fmtDateTime, truncate } from '../lib/format'
+import { fmtCost, fmtDateTime, truncate, normalizeJobStatus } from '../lib/format'
 import {
   AUDIENCE_OPTIONS,
-  CITATION_STYLE_OPTIONS,
   GENERATION_MODE_OPTIONS,
   LANGUAGE_OPTIONS,
-  PAGE_SIZE_OPTIONS,
   SCENARIO_OPTIONS,
   TONE_OPTIONS,
+  sanitizeJobOptions,
   type JobOptions,
 } from '../lib/jobOptions'
 import { confirmDialog } from '../stores/modalStore'
@@ -23,11 +22,10 @@ import { notifyError, notifySuccess } from '../stores/toastStore'
 const STAGES = [
   '1 解析素材',
   '2 规划大纲',
-  '3 分析模板',
-  '4 模板合并',
-  '5 文档构建',
-  '6 质量检查',
-  '7 导出完成',
+  '3 分析结构',
+  '4 文档构建',
+  '5 质量检查',
+  '6 导出完成',
 ]
 
 type Tab = 'overview' | 'raw' | 'timeline' | 'files'
@@ -80,7 +78,9 @@ export function JobDetailPage() {
     refetchInterval: 10_000,
   })
   const revisions = revisionsQ.data?.items ?? []
-  const latestDone = revisions.find((r) => r.is_latest && r.status === 'done')
+  const latestDone = revisions.find(
+    (r) => r.is_latest && normalizeJobStatus(r.status) === 'done',
+  )
 
   const currentStageIdx = useMemo(() => {
     if (!stage) return -1
@@ -244,7 +244,7 @@ export function JobDetailPage() {
               取消
             </button>
           )}
-          {job.status === 'done' && hasDocx && (
+          {normalizeJobStatus(job.status) === 'done' && hasDocx && (
             <Link
               to={`/jobs/${job.id}/edit`}
               className="rounded-md border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
@@ -491,7 +491,7 @@ export function JobDetailPage() {
                       </p>
                     )}
                   </div>
-                  {r.status === 'done' && r.docx_url && (
+                  {normalizeJobStatus(r.status) === 'done' && r.docx_url && (
                     <button
                       type="button"
                       onClick={() => downloadUrl(r.docx_url!, `${r.job_id.slice(0, 8)}.docx`)}
@@ -614,7 +614,7 @@ function FieldGroup({
 }
 
 function JobOptionsPanel({ job }: { job: { project_name: string | null; prompt: string; options: JobOptions | null; uploads: { name: string; size: number | null }[] } }) {
-  const o = job.options
+  const o = job.options ? sanitizeJobOptions(job.options) : null
   return (
     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
       <h3 className="mb-3 text-sm font-medium">创建参数</h3>
@@ -653,23 +653,6 @@ function JobOptionsPanel({ job }: { job: { project_name: string | null; prompt: 
                 { label: '场景', value: optionLabelFrom(SCENARIO_OPTIONS, o.scenario) },
                 { label: '受众', value: optionLabelFrom(AUDIENCE_OPTIONS, o.audience) },
                 { label: '语调', value: optionLabelFrom(TONE_OPTIONS, o.tone) },
-              ]}
-            />
-          </FieldGroup>
-
-          <FieldGroup title="文档结构">
-            <FieldList
-              items={[
-                { label: '目标章节数', value: `${o.section_count} 节` },
-                { label: '页面尺寸', value: optionLabelFrom(PAGE_SIZE_OPTIONS, o.page_size) },
-                { label: '生成目录', value: o.include_toc ? '是' : '否' },
-                { label: '封面页', value: o.include_cover ? '是' : '否' },
-                {
-                  label: '引用格式',
-                  value: o.citation_style
-                    ? optionLabelFrom(CITATION_STYLE_OPTIONS, o.citation_style)
-                    : '无',
-                },
               ]}
             />
           </FieldGroup>

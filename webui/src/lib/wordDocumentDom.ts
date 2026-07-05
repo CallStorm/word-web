@@ -227,6 +227,76 @@ export function scrollToDataPath(doc: Document, dataPath: string) {
   })
 }
 
+function tocLinkLabel(anchor: HTMLAnchorElement): string {
+  const firstSpan = anchor.querySelector('span')
+  return (firstSpan?.textContent ?? anchor.textContent ?? '').trim()
+}
+
+function scrollElementIntoParentView(
+  target: Element,
+  iframe: HTMLIFrameElement,
+  scrollRoot: HTMLElement,
+  zoom: number,
+) {
+  const iframeRect = iframe.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const offset = (targetRect.top - iframeRect.top) / zoom + scrollRoot.scrollTop - 24
+  scrollRoot.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' })
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+/** Intercept TOC link clicks and scroll the outer preview container. */
+export function wireTocNavigation(
+  doc: Document,
+  iframe: HTMLIFrameElement,
+  scrollRoot: HTMLElement,
+  zoom = 1,
+): () => void {
+  const handler = (e: Event) => {
+    const target = e.target
+    if (!(target instanceof Element)) return
+    const anchor = target.closest('.toc a[href^="#"]')
+    if (!(anchor instanceof HTMLAnchorElement)) return
+    e.preventDefault()
+
+    const id = anchor.getAttribute('href')?.slice(1)
+    let el: Element | null = null
+    if (id) {
+      el = doc.getElementById(id) ?? doc.querySelector(`a[id="${CSS.escape(id)}"]`)
+    }
+    if (!el) {
+      const label = tocLinkLabel(anchor)
+      if (label) {
+        for (const candidate of doc.querySelectorAll('[data-path]')) {
+          if ((candidate.textContent ?? '').trim().includes(label)) {
+            el = candidate
+            break
+          }
+        }
+      }
+    }
+    if (el) scrollElementIntoParentView(el, iframe, scrollRoot, zoom)
+  }
+  doc.addEventListener('click', handler, true)
+  return () => doc.removeEventListener('click', handler, true)
+}
+
+/** Trigger officecli pagination reflow after iframe load. */
+export function scheduleWordDocumentReflow(doc: Document | null) {
+  if (!doc) return
+  const win = doc.defaultView
+  if (!win) return
+  const reflow = () => {
+    try {
+      win.dispatchEvent(new Event('resize'))
+    } catch {
+      /* ignore */
+    }
+  }
+  reflow()
+  ;[150, 500, 1200].forEach((ms) => win.setTimeout(reflow, ms))
+}
+
 export function observeVisibleHeading(
   doc: Document,
   dataPaths: string[],

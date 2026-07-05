@@ -128,7 +128,9 @@ export interface RevisionRequest {
 }
 
 export interface RevisionItem {
-  slide_index: number
+  slide_index?: number | null
+  data_path?: string | null
+  quote?: string | null
   comment: string
 }
 

@@ -53,13 +53,37 @@ export function formatAnnotationComment(ann: PageAnnotation): string {
 /** One revision item per annotation (same page may produce multiple items). */
 export function collectRevisionItems(
   annotations: PageAnnotation[],
-): { slide_index: number; comment: string }[] {
+): {
+  slide_index?: number
+  data_path?: string
+  quote?: string
+  comment: string
+}[] {
   return annotations
     .filter((a) => a.text.trim())
-    .map((a) => ({
-      slide_index: a.pageIndex,
-      comment: formatAnnotationComment(a).slice(0, MAX_COMMENT),
-    }))
+    .map((a) => {
+      const item: {
+        slide_index?: number
+        data_path?: string
+        quote?: string
+        comment: string
+      } = {
+        comment: a.text.trim().slice(0, MAX_COMMENT),
+      }
+      if (a.dataPath) {
+        item.data_path = a.dataPath
+        if (a.quote?.trim()) {
+          item.quote = a.quote.trim().slice(0, MAX_QUOTE)
+        }
+      } else {
+        item.slide_index = a.pageIndex
+        const prefix = formatAnnotationComment(a)
+        if (prefix !== a.text.trim()) {
+          item.comment = prefix.slice(0, MAX_COMMENT)
+        }
+      }
+      return item
+    })
 }
 
 /** Merge pin annotations + optional freeform supplement into revision comment. */

@@ -163,7 +163,10 @@ export function DocumentOutlineSidebar({
           </ul>
         ) : slides.length > 0 ? (
           <>
-            <p className="mb-2 px-1 text-[11px] text-slate-400">文档无标题大纲，按页浏览</p>
+            <p className="mb-2 px-1 text-[11px] text-slate-400">
+              文档无标题大纲。请补全 Heading1/Heading2，或使用右侧 HTML 滚动浏览全文。
+              {slides.length <= 1 ? '（仅封面缩略图可用）' : ''}
+            </p>
             <PageFallbackList
               slides={slides}
               currentIndex={currentIndex}

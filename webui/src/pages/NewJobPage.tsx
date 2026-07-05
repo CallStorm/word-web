@@ -15,13 +15,9 @@ import {
 } from '../lib/aiAutoFill'
 import {
   AUDIENCE_OPTIONS,
-  CITATION_STYLE_OPTIONS,
   DEFAULT_JOB_OPTIONS,
   LANGUAGE_OPTIONS,
-  PAGE_SIZE_OPTIONS,
   SCENARIO_OPTIONS,
-  SECTION_COUNT_MAX,
-  SECTION_COUNT_MIN,
   TONE_OPTIONS,
   formatJobOptionsSummary,
   parseOutlineLines,
@@ -68,11 +64,6 @@ function OptionSelect<T extends string>({
     </label>
   )
 }
-
-const SECTION_COUNT_OPTIONS = Array.from(
-  { length: SECTION_COUNT_MAX - SECTION_COUNT_MIN + 1 },
-  (_, i) => SECTION_COUNT_MIN + i,
-)
 
 export function NewJobPage() {
   const quota = useAuthStore((s) => s.quota)
@@ -125,13 +116,9 @@ export function NewJobPage() {
       fd.append('scenario', options.scenario)
       fd.append('audience', options.audience)
       fd.append('tone', options.tone)
-      fd.append('section_count', String(options.section_count))
-      fd.append('include_toc', options.include_toc ? 'true' : 'false')
-      fd.append('include_cover', options.include_cover ? 'true' : 'false')
-      fd.append('page_size', options.page_size)
-      if (options.citation_style) fd.append('citation_style', options.citation_style)
       fd.append('core_topic', coreTopic.trim())
       if (outlineText.trim()) fd.append('outline', outlineText)
+      if (keyPoints.length > 0) fd.append('key_points', keyPoints.join('\n'))
       for (const f of files) fd.append('files', f, f.name)
       const job = await api<{ id: string }>('POST', '/api/jobs', fd)
       notifySuccess('已开始生成，请稍候…')
@@ -199,7 +186,6 @@ export function NewJobPage() {
                     disabled={!coreTopic.trim()}
                     body={{
                       core_topic: coreTopic.trim(),
-                      page_count: options.section_count,
                       scenario: options.scenario,
                       audience: options.audience,
                       language: options.language,
@@ -301,56 +287,6 @@ export function NewJobPage() {
                   onChange={(v) => set('tone', v)}
                   className="flex-1 min-w-[6rem]"
                 />
-              </div>
-
-              <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-                <label className="flex flex-col gap-0.5">
-                  <span className="text-xs text-slate-500">目标章节数</span>
-                  <select
-                    value={String(options.section_count)}
-                    onChange={(e) => set('section_count', parseInt(e.target.value, 10))}
-                    className={SELECT_CLASS}
-                  >
-                    {SECTION_COUNT_OPTIONS.map((n) => (
-                      <option key={n} value={n}>
-                        {n} 节
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <OptionSelect
-                  label="页面尺寸"
-                  options={PAGE_SIZE_OPTIONS}
-                  value={options.page_size}
-                  onChange={(v) => set('page_size', v)}
-                  className="min-w-[6rem]"
-                />
-                <OptionSelect
-                  label="引用格式"
-                  options={[{ value: '', label: '无' }, ...CITATION_STYLE_OPTIONS]}
-                  value={options.citation_style ?? ''}
-                  onChange={(v) => set('citation_style', v ? (v as JobOptions['citation_style']) : null)}
-                  className="min-w-[7rem]"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-5 text-sm">
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={options.include_toc}
-                    onChange={(e) => set('include_toc', e.target.checked)}
-                  />
-                  <span>生成目录</span>
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={options.include_cover}
-                    onChange={(e) => set('include_cover', e.target.checked)}
-                  />
-                  <span>包含封面</span>
-                </label>
               </div>
             </div>
           )}

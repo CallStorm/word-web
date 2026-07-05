@@ -1,7 +1,9 @@
 """Synchronous high-level run/resume wrappers."""
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 import threading
 from pathlib import Path
 from typing import Callable
@@ -11,11 +13,12 @@ from backend.runner.claude import stream_claude
 from backend.runner.constants import AUTO_CONFIRM_TEXT, SKIP_EIGHT_CONFIRM_MAX
 from backend.runner.stages import _project_snapshot, find_docx, resolve_project_dir, build_initial_prompt
 from backend.runner.preview import (
-    check_figure_adjacency_warnings,
+    PREVIEW_COVER_PAGES,
     generate_docx_html,
     generate_docx_outline,
     generate_docx_previews,
 )
+from backend.runner.docx_finalize import FinalizeResult, finalize_docx
 from backend.runner.errors import humanize_error
 
 log = logging.getLogger("backend.runner.sync")
@@ -28,13 +31,25 @@ def _humanize_run_error(raw: str | None, job_id: str | None) -> str | None:
     return humanize_error(raw)
 
 
-def _emit_figure_adjacency_warnings(
+
+def _finalize_preview_docx(
     docx: Path,
+    preview_root: Path,
     on_event: Callable[[dict], None],
-) -> None:
-    for warning in check_figure_adjacency_warnings(docx):
-        log.warning("figure adjacency: %s", warning)
-        on_event({"kind": "agent_text", "text": f"⚠ {warning}"})
+    options: JobOptions | None,
+) -> FinalizeResult:
+    parsed_options = options or parse_job_options(None)
+    result = finalize_docx(docx, parsed_options, project_dir=preview_root)
+    for note in result.fixes:
+        log.info("docx finalize fix: %s", note)
+    for issue in result.blocking:
+        log.warning("docx finalize blocking: %s", issue)
+    for warning in result.warnings:
+        log.warning("docx finalize: %s", warning)
+    generate_docx_previews(preview_root, docx, max_pages=PREVIEW_COVER_PAGES)
+    generate_docx_html(preview_root, docx)
+    generate_docx_outline(preview_root, docx)
+    return result
 
 
 def run_sync(
@@ -205,12 +220,9 @@ def run_sync(
         )
 
     if docx:
-        status = "done"
         preview_root = project_dir or project_root
-        generate_docx_previews(preview_root, docx)
-        generate_docx_html(preview_root, docx)
-        generate_docx_outline(preview_root, docx)
-        _emit_figure_adjacency_warnings(docx, on_event)
+        finalize_result = _finalize_preview_docx(docx, preview_root, on_event, options)
+        status = finalize_result.job_status
     elif no_progress_bail:
         # auto-resume 检测到 snapshot 完全没变 → agent 在空转 / 撒谎。
         # 标 failed + 触发 refund（不是用户 prompt 的问题，是 server 没识别出 agent 异常）
@@ -310,13 +322,9 @@ def resume_sync(
     docx = find_docx(project_root)
 
     if docx:
-        status = "done"
         preview_root = project_dir or project_root
-        generate_docx_previews(preview_root, docx)
-        generate_docx_html(preview_root, docx)
-        generate_docx_outline(preview_root, docx)
-        _emit_figure_adjacency_warnings(docx, on_event)
-        status = "paused"
+        finalize_result = _finalize_preview_docx(docx, preview_root, on_event, None)
+        status = finalize_result.job_status
     else:
         status = "failed"
 

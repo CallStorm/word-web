@@ -38,6 +38,7 @@ import uuid
 from pathlib import Path
 from typing import Sequence
 
+from backend.api.deps import is_job_editable_status
 from backend.api.schemas.job_options import GlobalRevision, RevisionItem
 from backend.paths import project_root_for
 
@@ -108,16 +109,19 @@ def _format_items_for_prompt(
     items: list[RevisionItem],
     slide_lookup: dict[int, str] | None = None,
 ) -> str:
-    """Render each comment as ``- 第 N 页（<name>）: <comment>`` if we have
-    a name lookup, else just ``- 第 N 页: <comment>``."""
+    """Render each comment with data_path or slide page target."""
     lines: list[str] = []
     for it in items:
-        if slide_lookup and it.slide_index in slide_lookup:
-            lines.append(
-                f"- 第 {it.slide_index} 页（{slide_lookup[it.slide_index]}）: {it.comment}"
-            )
-        else:
-            lines.append(f"- 第 {it.slide_index} 页: {it.comment}")
+        prefix = ""
+        if it.data_path:
+            prefix = f"[段落 {it.data_path}]"
+            if it.quote:
+                prefix += f' 引用："{it.quote.strip()[:200]}"'
+        elif it.slide_index is not None and slide_lookup and it.slide_index in slide_lookup:
+            prefix = f"第 {it.slide_index} 页（{slide_lookup[it.slide_index]}）"
+        elif it.slide_index is not None:
+            prefix = f"第 {it.slide_index} 页"
+        lines.append(f"- {prefix}: {it.comment}")
     return "\n".join(lines)
 
 
@@ -133,23 +137,18 @@ def _word_postprocess_steps() -> str:
     return (
         "后处理（修改 docx 后必须执行）：\n"
         "1. `officecli view <docx> issues --json` 与 `officecli validate <docx>`\n"
-        "2. `bash skills/word-master/scripts/generate_preview.sh <project_dir>`\n"
-        "3. 确认 exports/*.docx 仍为最终产物\n"
+        "2. 确认 exports/*.docx 仍为最终产物（预览 PNG/HTML 由 host 自动生成，勿运行 generate_preview.sh）\n"
     )
 
 
 def _word_figure_insertion_rules() -> str:
     return (
-        "插图/架构图（若用户要求增加图、表图、流程图、架构图）：\n"
-        "- 图题段落与图片/diagram **必须相邻**（图题在上、图在下），禁止图题与图片相隔数十段\n"
-        "- **禁止**无定位的 `officecli add <docx> /body`（会追加到文档末尾）；"
-        "先用 `officecli view <docx> annotated` 找到锚点段落的 paraId 或 `[段落 /body/p[N]]`，"
-        "再用 `--after '/body/p[@paraId=...]'` 或 `--after /body/p[N]` 插入\n"
-        "- 推荐顺序：① `--type paragraph` 插入图题（Caption 或 Normal，勿用 Heading 充当图题）"
-        " ② 紧接 `--type diagram` 或 `--type image --prop src=...` 插在图题段之后\n"
-        "- 完成后自检：`officecli view <docx> annotated`，确认图题下 1–2 段内出现 `[Image:` 或 diagram；"
-        "若图片落在文档末尾而图题在前部，视为失败，需删除错位图片并 `--after` 重插\n"
-        "- 详见 `skills/word-master/workflows/revision-figures.md`\n"
+        "插图/架构图（仅当用户要求时）：\n"
+        "- 图题段落与图片/diagram **必须相邻**（图题在上、图在下）\n"
+        "- 使用 `--after '/body/p[@paraId=...]'` 或 `--after /body/p[N]` 锚定插入位置\n"
+        "- 推荐顺序：① `--type paragraph` 图题（style=Caption，align=center）"
+        " ② 紧接 `--type diagram` 或 `--type image`\n"
+        "- 构建标准见 skills/officecli-docx/SKILL.md\n"
     )
 
 
@@ -398,9 +397,9 @@ def queue_revision(
             raise RevisionError(f"source job {old_job_id} not found")
         if old.user_id != user_id:
             raise RevisionError("source job does not belong to this user")
-        if old.status != "done":
+        if old.status != "done" and not is_job_editable_status(old.status):
             raise RevisionError(
-                f"source job status is {old.status!r}; only 'done' jobs are editable"
+                f"source job status is {old.status!r}; only completed jobs are editable"
             )
         if not old.project_dir or not Path(old.project_dir).is_dir():
             raise RevisionError(

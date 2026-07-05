@@ -9,7 +9,7 @@ import {
 } from '../components/jobs/StatusFilter'
 import { useJobsInfinite } from '../hooks/useJobs'
 import type { Job } from '../api/types'
-import { truncate } from '../lib/format'
+import { truncate, normalizeJobStatus } from '../lib/format'
 
 type Filter = StatusFilterValue
 
@@ -17,7 +17,7 @@ function matchesFilter(job: Job, filter: Filter): boolean {
   if (filter === 'all') return true
   if (filter === 'running') return job.status === 'running' || job.status === 'queued'
   if (filter === 'paused') return job.status === 'paused'
-  if (filter === 'done') return job.status === 'done'
+  if (filter === 'done') return normalizeJobStatus(job.status) === 'done'
   if (filter === 'failed') return job.status === 'failed' || job.status === 'cancelled'
   return true
 }
@@ -27,7 +27,7 @@ function computeStatusCounts(jobs: Job[]): StatusFilterCounts {
     all: jobs.length,
     running: jobs.filter((j) => j.status === 'running' || j.status === 'queued').length,
     paused: jobs.filter((j) => j.status === 'paused').length,
-    done: jobs.filter((j) => j.status === 'done').length,
+    done: jobs.filter((j) => normalizeJobStatus(j.status) === 'done').length,
     failed: jobs.filter((j) => j.status === 'failed' || j.status === 'cancelled').length,
   }
 }

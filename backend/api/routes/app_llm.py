@@ -36,7 +36,6 @@ class OptimizePromptBody(_Lang):
 
 class GenerateOutlineBody(_Lang):
     core_topic: str = Field(min_length=1, max_length=2000)
-    page_count: int = Field(ge=3, le=30, default=5)
     scenario: str = "general"
     audience: str = "general"
 
@@ -94,7 +93,6 @@ async def post_generate_outline(body: GenerateOutlineBody, user: CurrentUser) ->
     try:
         data, info = llm.generate_outline(
             core_topic=body.core_topic,
-            page_count=body.page_count,
             scenario=body.scenario,
             audience=body.audience,
             language=body.language,

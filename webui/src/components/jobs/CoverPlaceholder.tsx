@@ -1,4 +1,4 @@
-import { statusLabel } from '../../lib/format'
+import { normalizeJobStatus, statusLabel } from '../../lib/format'
 import type { JobStatus } from '../../api/types'
 
 const ACTIVE: JobStatus[] = ['queued', 'running', 'paused']
@@ -18,9 +18,10 @@ export function CoverPlaceholder({
   id: string
   hasDocx?: boolean
 }) {
-  const isActive = ACTIVE.includes(status as JobStatus)
-  const isFailed = status === 'failed' || status === 'cancelled'
-  const isDone = status === 'done'
+  const normalized = normalizeJobStatus(status)
+  const isActive = ACTIVE.includes(normalized as JobStatus)
+  const isFailed = normalized === 'failed' || normalized === 'cancelled'
+  const isDone = normalized === 'done'
 
   const gradient = isFailed
     ? 'linear-gradient(135deg, rgb(254 242 242 / 0.9), rgb(248 250 252 / 0.95))'
@@ -71,7 +72,7 @@ export function CoverPlaceholder({
         }`}
       >
         {isActive
-          ? statusLabel(status)
+          ? statusLabel(normalized)
           : isFailed
             ? '生成失败'
             : showDocIcon

@@ -1,18 +1,1 @@
-{
-  "headings": [
-    {
-      "line": 1,
-      "text": "Title Page",
-      "level": 0,
-      "style": "Title",
-      "data_path": "/body/p[1]"
-    },
-    {
-      "line": 2,
-      "text": "Section 1",
-      "level": 1,
-      "style": "Heading1",
-      "data_path": "/body/p[2]"
-    }
-  ]
-}
+{"headings": [{"line": 1, "text": "T", "level": 0, "style": "Title"},{"line": 2, "text": "H", "level": 1, "style": "Heading1"}]}

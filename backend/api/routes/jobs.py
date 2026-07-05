@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from backend.api.deps import (
     get_job_or_404,
+    is_job_editable_status,
     job_to_dict,
     require_owner_or_admin,
     resolve_job_project_dir,
@@ -63,20 +64,17 @@ async def create_job(
     scenario: Annotated[str, Form()] = "report",
     audience: Annotated[str, Form()] = "general",
     tone: Annotated[str, Form()] = "formal",
-    section_count: Annotated[int, Form()] = 5,
-    include_toc: Annotated[bool, Form()] = True,
-    include_cover: Annotated[bool, Form()] = True,
-    page_size: Annotated[str, Form()] = "A4",
-    citation_style: Annotated[str | None, Form()] = None,
     core_topic: Annotated[str | None, Form()] = None,
     outline: Annotated[str, Form()] = "",
+    key_points: Annotated[str, Form()] = "",
     generation_hint: Annotated[str, Form()] = "",
     files: Annotated[list[UploadFile], File()] = [],
 ) -> dict:
-    if generation_mode != "freeform":
-        raise HTTPException(422, "only freeform generation_mode is supported")
+    if generation_mode not in ("freeform", "template"):
+        raise HTTPException(422, "generation_mode must be freeform or template")
 
     outline_list = [s.strip() for s in outline.split("\n") if s.strip()] if outline else None
+    key_points_list = [s.strip() for s in key_points.split("\n") if s.strip()] if key_points else None
 
     try:
         opts = job_options_from_form(
@@ -85,13 +83,9 @@ async def create_job(
             scenario=scenario,
             audience=audience,
             tone=tone,
-            section_count=section_count,
-            include_toc=include_toc,
-            include_cover=include_cover,
-            page_size=page_size,
-            citation_style=citation_style,
             core_topic=core_topic,
             outline=outline_list,
+            key_points=key_points_list,
             generation_hint=generation_hint.strip() or None,
         )
     except ValidationError as e:
@@ -487,13 +481,13 @@ async def download_document_html(job_id: str, user: CurrentUser):
 
 
 def _load_verified_document_outline(j: Job, project_dir: Path | None) -> list[dict]:
-    """Return heading outline, generating on demand when docx is available."""
-    headings = load_document_outline(project_dir)
+    """Return heading outline for sidebar nav (Heading1/Heading2 only)."""
+    headings = load_document_outline(project_dir, nav_only=True)
     if not headings and j.docx_path and project_dir:
         docx = Path(j.docx_path)
         if docx.is_file():
             generate_docx_outline(project_dir, docx)
-            headings = load_document_outline(project_dir)
+            headings = load_document_outline(project_dir, nav_only=True)
     return headings
 
 
@@ -881,7 +875,7 @@ async def get_edit_targets(job_id: str, user: CurrentUser) -> dict:
         "has_document_html": False,
         "document_outline": [],
     }
-    if j.status != "done":
+    if j.status != "done" and not is_job_editable_status(j.status):
         out["reason"] = (
             f"job is not done (status={j.status}); only completed decks can be edited"
         )
@@ -968,15 +962,22 @@ async def post_revision(
     if has_items:
         max_idx = max(sl["index"] for sl in slides)
         for it in body.items or []:
-            if it.slide_index < 1 or it.slide_index > max_idx:
-                raise HTTPException(
-                    400,
-                    f"slide_index {it.slide_index} is out of range 1..{max_idx}",
-                )
+            if it.data_path:
+                if not it.data_path.startswith("/body/"):
+                    raise HTTPException(
+                        400,
+                        f"data_path must start with /body/ (got {it.data_path!r})",
+                    )
+            elif it.slide_index is not None:
+                if it.slide_index < 1 or it.slide_index > max_idx:
+                    raise HTTPException(
+                        400,
+                        f"slide_index {it.slide_index} is out of range 1..{max_idx}",
+                    )
+            else:
+                raise HTTPException(400, "each revision item needs slide_index or data_path")
             if not it.comment.strip():
-                raise HTTPException(
-                    400, f"slide {it.slide_index}: comment is empty"
-                )
+                raise HTTPException(400, "revision comment is empty")
 
     if has_global:
         gr = body.global_revision
@@ -1054,10 +1055,14 @@ async def list_revisions(job_id: str, user: CurrentUser) -> dict:
             "status": job_row.status,
             "created_at": job_row.created_at.isoformat() if job_row.created_at else None,
             "docx_url": (
-                f"/api/jobs/{job_row.id}/docx" if job_row.status == "done" else None
+                f"/api/jobs/{job_row.id}/docx"
+                if is_job_editable_status(job_row.status)
+                else None
             ),
             "preview_url": (
-                f"/api/jobs/{job_row.id}/preview" if job_row.status == "done" else None
+                f"/api/jobs/{job_row.id}/preview"
+                if is_job_editable_status(job_row.status)
+                else None
             ),
             "comments": comments,
             "revision_mode": revision_mode,

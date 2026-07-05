@@ -15,8 +15,6 @@ export type JobAudience =
   | 'expert'
   | 'student'
 export type JobTone = 'formal' | 'casual' | 'technical' | 'professional' | 'concise'
-export type PageSize = 'A4' | 'Letter'
-export type CitationStyle = 'APA' | 'IEEE' | 'MLA' | 'Chicago'
 
 export interface JobOptions {
   generation_mode: GenerationMode
@@ -24,13 +22,9 @@ export interface JobOptions {
   scenario: JobScenario
   audience: JobAudience
   tone: JobTone
-  section_count: number
-  include_toc: boolean
-  include_cover: boolean
-  page_size: PageSize
-  citation_style: CitationStyle | null
   core_topic: string | null
   outline: string[] | null
+  key_points?: string[] | null
   generation_hint?: string | null
 }
 
@@ -74,35 +68,15 @@ export const TONE_OPTIONS: OptionItem<JobTone>[] = [
   { value: 'casual', label: '轻松友好' },
 ]
 
-export const PAGE_SIZE_OPTIONS: OptionItem<PageSize>[] = [
-  { value: 'A4', label: 'A4' },
-  { value: 'Letter', label: 'Letter' },
-]
-
-export const CITATION_STYLE_OPTIONS: OptionItem<CitationStyle>[] = [
-  { value: 'APA', label: 'APA' },
-  { value: 'IEEE', label: 'IEEE' },
-  { value: 'MLA', label: 'MLA' },
-  { value: 'Chicago', label: 'Chicago' },
-]
-
 export const DEFAULT_JOB_OPTIONS: JobOptions = {
   generation_mode: 'freeform',
   language: 'zh',
   scenario: 'report',
   audience: 'general',
   tone: 'formal',
-  section_count: 5,
-  include_toc: true,
-  include_cover: true,
-  page_size: 'A4',
-  citation_style: null,
   core_topic: null,
   outline: null,
 }
-
-export const SECTION_COUNT_MIN = 2
-export const SECTION_COUNT_MAX = 30
 
 const ALL_OPTIONS = [
   ...LANGUAGE_OPTIONS,
@@ -110,8 +84,6 @@ const ALL_OPTIONS = [
   ...SCENARIO_OPTIONS,
   ...AUDIENCE_OPTIONS,
   ...TONE_OPTIONS,
-  ...PAGE_SIZE_OPTIONS,
-  ...CITATION_STYLE_OPTIONS,
 ]
 
 export function optionLabel(value: string): string {
@@ -124,7 +96,6 @@ export function formatJobOptionsSummary(options: JobOptions): string {
     optionLabel(options.language),
     optionLabel(options.scenario),
     optionLabel(options.tone),
-    `${options.section_count} 节`,
   ].join(' · ')
 }
 

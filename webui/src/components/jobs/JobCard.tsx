@@ -10,6 +10,7 @@ import { confirmDialog } from '../../stores/modalStore'
 import { useDeleteJob, useRetryJob } from '../../hooks/useJobs'
 import { notifyError, notifySuccess } from '../../stores/toastStore'
 import { DOCUMENT_COVER_CLASS, DOCUMENT_PREVIEW_IMG_CLASS, JOB_CARD_CLASS, JOB_CARD_FOOTER_CLASS } from '../../lib/documentAspect'
+import { normalizeJobStatus } from '../../lib/format'
 
 export function JobCard({
   job,
@@ -19,7 +20,8 @@ export function JobCard({
   sharedErrorCount?: number
 }) {
   const hasDocx = !!job.docx_path
-  const isDone = job.status === 'done'
+  const status = normalizeJobStatus(job.status)
+  const isDone = status === 'done'
   const showDownload = isDone && hasDocx
   const canRetry =
     job.status === 'failed' ||

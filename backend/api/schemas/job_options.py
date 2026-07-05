@@ -4,15 +4,13 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 Language = Literal["zh", "en"]
-GenerationMode = Literal["freeform"]
+GenerationMode = Literal["freeform", "template"]
 Scenario = Literal["report", "contract", "letter", "memo", "academic", "general"]
 Audience = Literal["general", "executive", "team", "client", "expert", "student"]
 Tone = Literal["formal", "casual", "technical", "professional", "concise"]
-PageSize = Literal["A4", "Letter"]
-CitationStyle = Literal["APA", "IEEE", "MLA", "Chicago"]
 
 SPEC_COLOR_KEYS = (
     "primary",
@@ -25,8 +23,16 @@ SPEC_COLOR_KEYS = (
 
 
 class RevisionItem(BaseModel):
-    slide_index: int = Field(ge=1, le=100)
+    slide_index: int | None = Field(default=None, ge=1, le=100)
+    data_path: str | None = Field(default=None, max_length=200)
+    quote: str | None = Field(default=None, max_length=500)
     comment: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def require_target(self) -> RevisionItem:
+        if self.slide_index is None and not self.data_path:
+            raise ValueError("slide_index or data_path is required")
+        return self
 
 
 ContentPreset = Literal["concise", "formal", "translate_en", "glossary"]
@@ -49,18 +55,17 @@ class RevisionRequest(BaseModel):
 
 
 class JobOptions(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     generation_mode: GenerationMode = "freeform"
     language: Language = "zh"
     scenario: Scenario = "report"
     audience: Audience = "general"
     tone: Tone = "formal"
-    include_toc: bool = True
-    include_cover: bool = True
-    page_size: PageSize = "A4"
-    citation_style: CitationStyle | None = None
-    section_count: int = Field(default=5, ge=2, le=30)
     core_topic: str | None = Field(default=None, max_length=2000)
     outline: list[str] | None = None
+    key_points: list[str] | None = None
+    template_data: dict[str, str] | None = None
     revision_items: list[RevisionItem] | None = None
     generation_hint: str | None = Field(default=None, max_length=2000)
     job_kind: Literal["agent"] = "agent"
@@ -105,13 +110,9 @@ def job_options_from_form(
     scenario: str = "report",
     audience: str = "general",
     tone: str = "formal",
-    section_count: int = 5,
-    include_toc: bool = True,
-    include_cover: bool = True,
-    page_size: str = "A4",
-    citation_style: str | None = None,
     core_topic: str | None = None,
     outline: list[str] | None = None,
+    key_points: list[str] | None = None,
     generation_hint: str | None = None,
 ) -> JobOptions:
     return JobOptions(
@@ -120,37 +121,32 @@ def job_options_from_form(
         scenario=scenario,  # type: ignore[arg-type]
         audience=audience,  # type: ignore[arg-type]
         tone=tone,  # type: ignore[arg-type]
-        section_count=section_count,
-        include_toc=include_toc,
-        include_cover=include_cover,
-        page_size=page_size,  # type: ignore[arg-type]
-        citation_style=citation_style,  # type: ignore[arg-type]
         core_topic=core_topic,
         outline=outline,
+        key_points=key_points,
         generation_hint=generation_hint,
     )
 
 
 def format_options_for_prompt(opts: JobOptions) -> str:
-    lines = ["Word 生成要求（请严格遵循）：", ""]
+    """Summarize job options for the agent — build/QA rules live in bundled skills."""
+    lines = ["## 生成选项", ""]
     lines.append(f"- 生成模式：{opts.generation_mode}")
-    lang_label, lang_rule = _LANGUAGE[opts.language]
-    scen_label, scen_hint = _SCENARIO[opts.scenario]
-    lines.append(f"- 语言：{lang_label}（{lang_rule}）")
-    lines.append(f"- 场景：{scen_label}（{scen_hint}）")
+    lang_label, _ = _LANGUAGE[opts.language]
+    scen_label, _ = _SCENARIO[opts.scenario]
+    lines.append(f"- 语言：{lang_label}")
+    lines.append(f"- 场景：{scen_label}")
     lines.append(f"- 语气：{_TONE[opts.tone]}")
     lines.append(f"- 受众：{opts.audience}")
-    lines.append(f"- 目标章节数：约 {opts.section_count} 节")
-    lines.append(f"- 页面尺寸：{opts.page_size}")
-    lines.append(f"- 生成目录：{'是' if opts.include_toc else '否'}")
-    lines.append(f"- 封面页：{'是（文档标题单独使用 style=Title 段落）' if opts.include_cover else '否'}")
-    if opts.citation_style:
-        lines.append(f"- 引用格式：{opts.citation_style}")
     if opts.core_topic:
         lines.append(f"- 核心主题：{opts.core_topic}")
     if opts.outline:
-        lines.append("- 用户大纲：")
+        lines.append("- 用户大纲（每项须对应一个 Heading1）：")
         for item in opts.outline:
+            lines.append(f"  - {item}")
+    if opts.key_points:
+        lines.append("- 章节要点：")
+        for item in opts.key_points:
             lines.append(f"  - {item}")
     if opts.generation_hint:
         lines.append(f"- 生成微调：{opts.generation_hint}")

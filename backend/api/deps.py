@@ -34,6 +34,17 @@ def job_has_preview(j: Job) -> bool:
     return find_cover_preview(resolve_job_project_dir(j)) is not None
 
 
+def _normalize_job_status(status: str) -> str:
+    if status in ("done_with_warnings", "quality_failed"):
+        return "done"
+    return status
+
+
+def is_job_editable_status(status: str) -> bool:
+    """Jobs with a deliverable docx that users may edit or download."""
+    return _normalize_job_status(status) == "done"
+
+
 def _list_uploads(j: Job) -> list[dict]:
     """列用户在创建时上传到 data/users/<uid>/uploads/<job_id>/ 的素材。"""
     if not j.user_id:
@@ -63,7 +74,7 @@ def job_to_dict(j: Job) -> dict:
         "user_id": j.user_id,
         "prompt": j.prompt,
         "project_name": j.project_name,
-        "status": j.status,
+        "status": _normalize_job_status(j.status),
         "session_id": j.session_id,
         "project_dir": j.project_dir,
         "docx_path": j.docx_path,

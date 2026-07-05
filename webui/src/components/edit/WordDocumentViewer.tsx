@@ -16,11 +16,13 @@ import {
   getSelectionClientRect,
   observeVisibleHeading,
   observeVisiblePage,
+  scheduleWordDocumentReflow,
   scrollToAnnotation,
   scrollToDataPath,
   scrollToPage as scrollToPageInDoc,
   selectionAnchor,
   setActiveHighlight,
+  wireTocNavigation,
   wrapRangeWithHighlight,
 } from '../../lib/wordDocumentDom'
 import { AnnotationPopover } from './AnnotationPopover'
@@ -69,6 +71,7 @@ export const WordDocumentViewer = forwardRef<
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const scrollRootRef = useRef<HTMLDivElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [zoom, setZoom] = useState(1)
@@ -168,12 +171,18 @@ export const WordDocumentViewer = forwardRef<
       outlinePaths.length > 0
         ? observeVisibleHeading(doc, outlinePaths, onActiveDataPathChange)
         : () => {}
+    const scrollRoot = scrollRootRef.current
+    const cleanupToc =
+      scrollRoot != null
+        ? wireTocNavigation(doc, iframe, scrollRoot, zoom)
+        : () => {}
 
     return () => {
       doc.removeEventListener('mouseup', onMouseUp)
       doc.removeEventListener('click', onClick)
       cleanupPageObserver()
       cleanupHeadingObserver()
+      cleanupToc()
     }
   }, [loaded, getDoc, onPageChange, onActiveDataPathChange, onSelectAnnotation, outlineHeadings, syncIframeHeight, zoom])
 
@@ -272,7 +281,7 @@ export const WordDocumentViewer = forwardRef<
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-auto p-4">
+      <div ref={scrollRootRef} className="relative min-h-0 flex-1 overflow-auto p-4">
         <div
           className="mx-auto origin-top transition-transform"
           style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%` }}
@@ -282,7 +291,12 @@ export const WordDocumentViewer = forwardRef<
             src={documentHtmlUrl}
             title="文档预览"
             className="w-full border-0 bg-transparent"
-            onLoad={() => setLoaded(true)}
+            onLoad={() => {
+              const doc = iframeRef.current?.contentDocument ?? null
+              scheduleWordDocumentReflow(doc)
+              syncIframeHeight()
+              setLoaded(true)
+            }}
           />
         </div>
 

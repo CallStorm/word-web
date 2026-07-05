@@ -107,12 +107,12 @@ class TestBuildRevisionPrompt(unittest.TestCase):
         self.assertIn("old-1", prompt)
         self.assertIn("第 2 页（pain）: 图太吓人", prompt)
         self.assertIn("第 5 页（capabilities）: 字号加大", prompt)
-        # Word path includes officecli + preview regeneration.
+        # Word path includes officecli; preview is host-generated, not generate_preview.sh.
         self.assertIn("officecli", prompt)
-        self.assertIn("generate_preview.sh", prompt)
+        self.assertNotIn("generate_preview.sh", prompt)
         self.assertIn("修改完成", prompt)
         self.assertIn("--after", prompt)
-        self.assertIn("revision-figures.md", prompt)
+        self.assertIn("officecli-docx/SKILL.md", prompt)
         # The degraded-mode disclaimer must NOT appear in the standard path.
         self.assertNotIn("session 不可用", prompt)
 
@@ -146,7 +146,7 @@ class TestBuildRevisionPrompt(unittest.TestCase):
         rules = _word_figure_insertion_rules()
         self.assertIn("--after", rules)
         self.assertIn("必须相邻", rules)
-        self.assertIn("revision-figures.md", rules)
+        self.assertIn("officecli-docx/SKILL.md", rules)
 
     def test_mixed_revision_prompt_includes_figure_rules(self) -> None:
         items = [RevisionItem(slide_index=2, comment="增加架构图")]
@@ -485,7 +485,7 @@ class TestBuildGlobalRevisionPrompt(unittest.TestCase):
         )
         self.assertIn("officecli", prompt)
         self.assertIn("colors", prompt)
-        self.assertIn("generate_preview.sh", prompt)
+        self.assertNotIn("generate_preview.sh", prompt)
 
     def test_visual_style_mentions_officecli(self) -> None:
         gr = GlobalRevision(kind="visual_style", visual_style="dark-tech")

@@ -1,36 +1,45 @@
 ---
 name: word-master
-description: Generate editable Word documents (.docx) from user text, attachments, or templates using OfficeCLI. Use when the user wants reports, memos, contracts, letters, or template-based document generation.
+description: Generate Word documents via word-web or standalone; thin orchestration over officecli-docx. Use for reports, memos, letters, and general .docx generation.
 ---
 
 # word-master
 
-End-to-end Word document generation orchestration, powered by [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI).
+Thin orchestration for Word (.docx) generation. **Does not replace** bundled skills — routes to them and adds web paths only.
 
-**This skill orchestrates the pipeline.** For DOM-level `.docx` operations, delegate to OfficeCLI (`officecli help docx`). For scene-specific writing rules, run `officecli load_skill word` or `academic-paper`.
+| Skill | Role |
+|-------|------|
+| `skills/officecli-docx/SKILL.md` | **Authoritative** build workflow + Delivery Gate |
+| `skills/officecli/SKILL.md` | docx CLI reference (help-first, resident mode) |
+| This file | Paths, pipeline, preview contract |
 
-## Step 0 — Prerequisites
+## 0. Prerequisites
 
 ```bash
 bash skills/word-master/scripts/check_prereqs.sh
 ```
 
-If `officecli` is missing, install:
+If `officecli` is missing: `curl -fsSL https://d.officecli.ai/install.sh | bash`
 
-```bash
-curl -fsSL https://d.officecli.ai/install.sh | bash
-```
+## 1. Load skills (mandatory order)
 
-When unsure about OfficeCLI syntax, run `officecli help docx <element>` — never guess property names.
+1. Read `skills/officecli-docx/SKILL.md` — follow **Common Workflow** (open → orient → build → close → QA).
+2. When CLI syntax is uncertain: `officecli help docx <element>` — never guess.
+3. Load scene skill once per document:
+   - `scenario=academic` in `JOB_OPTIONS_JSON` → `officecli load_skill academic-paper`
+   - otherwise → `officecli load_skill word`
 
-## Step 1 — Detect Run Mode
+**Build discipline:**
+- `officecli open "$FILE"` at start; `officecli close "$FILE"` before QA **and before host reads the file** (preview, Delivery Gate).
+- Run commands **incrementally**; check exit codes after each step.
+- Prefer `add`/`set` with `--after` anchors (`@paraId=`).
+
+## 2. Paths
 
 | Mode | Detection |
 |------|-----------|
-| **Web** | `JOB_ID` env var is set → read `references/web-mode.md` |
-| **Standalone** | No `JOB_ID` → use current working directory |
-
-Resolve paths:
+| **Web** | `JOB_ID` set → see `references/web-mode.md` |
+| **Standalone** | No `JOB_ID` → `./projects/<name>/` |
 
 ```
 WORK_ROOT  = $WORK_ROOT or ./projects/<project_name>/
@@ -41,115 +50,44 @@ SOURCES    = $WORK_ROOT/sources/
 
 Create `WORK_ROOT`, `exports/`, `sources/` if missing.
 
-## Step 2 — Parse Sources
+## 3. Pipeline
 
-If uploads exist:
+1. **Parse uploads** (if any):
+   ```bash
+   python3 skills/word-master/scripts/source_to_md.py "$UPLOADS" -o "$WORK_ROOT/sources/summary.md"
+   ```
+2. **Outline** — write `$WORK_ROOT/outline.md` (title, section headings, key points) before building.
+3. **Create + open**:
+   ```bash
+   FILE="$WORK_ROOT/exports/output.docx"
+   officecli create "$FILE"
+   officecli open "$FILE"
+   ```
+4. **Build incrementally** — follow officecli-docx Common Workflow:
+   - Chapter titles: `style=Heading1`; subsections: `style=Heading2`
+   - Each item in `outline.md` or `JOB_OPTIONS_JSON.outline` → one **Heading1**
+   - Cover, TOC, tables, figures: **only when user prompt asks** — no defaults
+5. **Close + Delivery Gate** — see officecli-docx § QA; fix all REJECT gates.
+6. **Handoff (web)** — report `exports/*.docx` path via `find_docx.py`. **Do not** run preview scripts; the host generates cover PNG + HTML + outline after finalize.
 
-```bash
-python3 skills/word-master/scripts/source_to_md.py "$UPLOADS" -o "$WORK_ROOT/sources/summary.md"
-```
+## 4. Structure minimum (word-web)
 
-Also read user prompt and any inline attachments. Write `outline.md` before building the document.
+Before handoff, run `officecli view "$FILE" outline` and confirm:
 
-## Step 3 — Route Generation Mode
+- Heading1 / Heading2 hierarchy (not Normal+bold for chapter titles)
+- If outline was provided, each outline item appears as a Heading1
 
-Read `generation_mode` from user request or `JOB_OPTIONS_JSON`:
-
-| Mode | Workflow |
-|------|----------|
-| `freeform` | `workflows/freeform.md` |
-| `template` + `{{key}}` placeholders | `workflows/template-merge.md` |
-| `template` + no placeholders | `workflows/template-guided.md` |
-
-Load OfficeCLI sub-skill by scenario:
-
-| scenario | sub-skill |
-|----------|-----------|
-| `academic` | `officecli load_skill academic-paper` |
-| default | `officecli load_skill word` |
-
-## Step 4 — Build Document
-
-Follow the selected workflow. General rules:
-
-- Final `.docx` must land in `exports/`
-- Use `officecli batch` for multi-step writes (one save cycle)
-- Use `officecli open` / `officecli close` for long editing sessions
-- Prefer stable `@paraId=` paths from `officecli get --json` over positional indices
-- **Never** use `Normal` + manual bold for titles; map `outline.md` to `Title` / `Heading1` / `Heading2` / `Normal` styles
-
-## Step 5 — Quality Gate (mandatory)
-
-Before delivery:
-
-```bash
-officecli view <doc.docx> issues --json
-officecli validate <doc.docx>
-```
-
-Fix all **Error**-severity issues. Warnings should be addressed when feasible.
-
-Also verify heading hierarchy:
-
-```bash
-officecli view <doc.docx> outline
-```
-
-The document title must use `Title`, sections `Heading1`, body `Normal`.
-
-## Step 6 — Preview + Deliver
-
-Generate PNG previews for word-web (cover + page carousel):
-
-```bash
-bash skills/word-master/scripts/generate_preview.sh "$WORK_ROOT"
-```
-
-Then locate the final artifact:
-
-```bash
-python3 skills/word-master/scripts/find_docx.py "$WORK_ROOT"
-```
-
-Report the `exports/*.docx` path to the user. In web mode, ensure the file is under `exports/` and `.preview/page-*.png` exists.
-
-## Template Hard Constraints
-
-When using a user template (merge or guided), read `references/template-rules.md` and **never** modify:
-
-- `/styles`, `/theme`, `/numbering`, `/settings`
-- Section page layout unless explicitly requested
-
-## Builtin Templates
-
-Shipped under `skills/word-master/templates/`:
-
-| File | Use case |
-|------|----------|
-| `report-zh.docx` | 工作报告 |
-| `memo-zh.docx` | 会议纪要 |
-| `contract-zh.docx` | 合同 |
-| `letter-zh.docx` | 公函/信件 |
-| `application-zh.docx` | 申请书 |
-
-Analyze placeholders: `python3 skills/word-master/scripts/analyze_template.py <template.docx>`
-
-## Project Layout
+## 5. Project layout
 
 ```
 <WORK_ROOT>/
-├── sources/
-│   └── summary.md
+├── sources/summary.md
 ├── outline.md
-├── content_map.json      # template-guided only
-├── data.json             # template-merge only
-└── exports/
-    └── output.docx
+├── .preview/page-*.png   # host-generated
+└── exports/output.docx
 ```
 
 ## References
 
-- `references/web-mode.md` — word-web environment variables
-- `references/template-rules.md` — template preservation rules
-- `references/officecli-bridge.md` — OfficeCLI collaboration
-- `references/scenarios/` — per-scenario writing guides
+- `references/web-mode.md` — word-web env vars
+- `skills/officecli-docx/SKILL.md` — build + Delivery Gate

@@ -1,3 +1,5 @@
+import type { JobStatus } from '../api/types'
+
 export const DEFAULT_TIMEZONE =
   import.meta.env.VITE_DISPLAY_TIMEZONE?.trim() || 'Asia/Shanghai'
 
@@ -51,6 +53,12 @@ export function fmtDateTime(iso: string | null | undefined): string {
 
 const TERMINAL_JOB_STATUSES = new Set(['done', 'failed', 'cancelled'])
 
+/** Map legacy quality-related statuses to done for display. */
+export function normalizeJobStatus(status: string): JobStatus | string {
+  if (status === 'done_with_warnings' || status === 'quality_failed') return 'done'
+  return status
+}
+
 /** Elapsed ms from job creation; terminal jobs use updated_at as end. */
 export function jobElapsedMs(
   job: { status: string; created_at: string | null; updated_at?: string | null },
@@ -58,7 +66,7 @@ export function jobElapsedMs(
 ): number | null {
   const start = parseServerDate(job.created_at)
   if (!start) return null
-  const terminal = TERMINAL_JOB_STATUSES.has(job.status)
+  const terminal = TERMINAL_JOB_STATUSES.has(normalizeJobStatus(job.status) as string)
   const end = terminal ? parseServerDate(job.updated_at) ?? now : now
   return Math.max(0, end.getTime() - start.getTime())
 }
@@ -82,7 +90,6 @@ export function fmtJobMetaLine(
     status: string
     created_at: string | null
     updated_at?: string | null
-    options?: { section_count?: number } | null
   },
   now: Date = new Date(),
 ): string {
@@ -101,13 +108,11 @@ export function fmtJobMetaLine(
   }
 
   const prefix = isActive ? '已用时' : isFailedOrCancelled && durationLabel === '未完成' ? '' : '耗时'
-  const sectionCount = job.options?.section_count
-  const pagePart = sectionCount != null ? ` · ${sectionCount} 节` : ''
 
   if (prefix) {
-    return `${dateText} · ${prefix} ${durationLabel}${pagePart}`
+    return `${dateText} · ${prefix} ${durationLabel}`
   }
-  return `${dateText} · ${durationLabel}${pagePart}`
+  return `${dateText} · ${durationLabel}`
 }
 
 type JobTipInput = {
@@ -117,7 +122,6 @@ type JobTipInput = {
   prompt?: string | null
   error_message?: string | null
   cost_usd?: number | null
-  options?: { section_count?: number } | null
 }
 
 /** Label + value for job card hover tooltip duration row. */
@@ -155,11 +159,6 @@ export function buildJobCardTipLines(
 
   const duration = fmtJobDurationLabel(job, now)
   lines.push({ label: duration.label, value: duration.value })
-
-  const sectionCount = job.options?.section_count
-  if (sectionCount != null) {
-    lines.push({ label: '节数', value: `${sectionCount} 节` })
-  }
 
   if (job.cost_usd != null) {
     lines.push({ label: '费用', value: fmtCost(job.cost_usd), tone: 'muted' })
@@ -213,5 +212,5 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function statusLabel(status: string): string {
-  return STATUS_LABELS[status] || status
+  return STATUS_LABELS[normalizeJobStatus(status) as string] || status
 }

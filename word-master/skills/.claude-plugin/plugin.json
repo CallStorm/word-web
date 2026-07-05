@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "word-master",
-  "description": "Generate editable DOCX from text, attachments, or templates — powered by OfficeCLI.",
+  "description": "Generate editable DOCX from text, attachments, or templates — bundles officecli, officecli-docx, and word-web orchestration.",
   "author": {
     "name": "CallStorm",
     "url": "https://github.com/CallStorm"
@@ -13,9 +13,11 @@
     "docx",
     "word",
     "officecli",
+    "officecli-docx",
     "template",
     "merge",
-    "document-generation"
+    "document-generation",
+    "word-web"
   ],
   "skills": "./"
 }
