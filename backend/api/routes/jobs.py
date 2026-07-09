@@ -34,6 +34,7 @@ from backend.runner.preview import (
     find_document_html,
     generate_docx_html,
     generate_docx_outline,
+    generate_docx_previews,
     list_slides,
     load_document_outline,
     read_document_html_content,
@@ -416,7 +417,7 @@ async def download_preview(job_id: str, user: CurrentUser):
         j = get_job_or_404(s, job_id)
         require_owner_or_admin(j, user)
         project_dir = resolve_job_project_dir(j)
-        preview = find_cover_preview(project_dir)
+        preview = _verified_cover_preview(j, project_dir)
         if not preview:
             raise HTTPException(404, "preview not ready")
 
@@ -439,6 +440,19 @@ async def download_preview(job_id: str, user: CurrentUser):
                 "cover preview has an invalid SVG namespace; re-run finalize_svg or regenerate",
             )
         return FileResponse(preview, media_type=media_type)
+
+
+def _verified_cover_preview(j: Job, project_dir: Path | None) -> Path | None:
+    """Return cover image path, generating page-1.png on demand when missing."""
+    preview = find_cover_preview(project_dir)
+    if preview:
+        return preview
+    if j.docx_path and project_dir:
+        docx = Path(j.docx_path)
+        if docx.is_file():
+            generate_docx_previews(project_dir, docx)
+            preview = find_cover_preview(project_dir)
+    return preview
 
 
 def _verified_document_html(j: Job, project_dir: Path | None) -> Path | None:
@@ -555,6 +569,8 @@ def _verified_slides(j: Job) -> list[dict]:
     Cached briefly so opening the preview modal (one manifest request plus N
     parallel ``/slides/{i}`` fetches) does not re-run ``list_slides`` /
     ``refresh_stale_pages`` on every thumbnail.
+
+    When no PNG previews exist, attempts lazy generation via officecli.
     """
     project_dir = resolve_job_project_dir(j)
     fingerprint = _project_slide_fingerprint(project_dir)
@@ -562,9 +578,15 @@ def _verified_slides(j: Job) -> list[dict]:
     lock = _slide_manifest_lock(j.id)
     with lock:
         hit = _slide_manifest_cache.get(j.id)
-        if hit and now - hit[0] < _SLIDE_MANIFEST_TTL and hit[1] == fingerprint:
+        if hit and now - hit[0] < _SLIDE_MANIFEST_TTL and hit[1] == fingerprint and hit[2]:
             return hit[2]
         verified = _build_verified_slides(j, project_dir)
+        if not verified and j.docx_path and project_dir:
+            docx = Path(j.docx_path)
+            if docx.is_file():
+                generate_docx_previews(project_dir, docx)
+                fingerprint = _project_slide_fingerprint(project_dir)
+                verified = _build_verified_slides(j, project_dir)
         _slide_manifest_cache[j.id] = (now, fingerprint, verified)
         return verified
 

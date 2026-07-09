@@ -21,6 +21,16 @@ cp .env.example .env
 bash scripts/dev-web.sh
 ```
 
+封面、HTML 预览、左侧导航大纲与页缩略图依赖 **officecli**。若宿主机未安装 officecli，后端会在生成预览时自动通过 `word-runner` Docker 镜像回退执行（需 Docker 可用且已构建镜像）。
+
+**CentOS 7 等旧系统**（宿主机 `officecli` 因 GLIBCXX 无法运行）建议强制 Docker 回退，在 `.env` 或 systemd 服务中设置：
+
+```bash
+OFFICECLI_USE_DOCKER=1
+```
+
+无需在宿主机安装或修复 officecli；确保 `docker info` 正常且已执行 `bash docker/word-runner/build.sh` 即可。
+
 ## 生成模式
 
 - **自由生成** — 根据文本/附件从零创建 Word

@@ -128,13 +128,13 @@ class PreviewHtmlTests(unittest.TestCase):
         cover = self.preview_dir / "page-1.png"
         cover.unlink(missing_ok=True)
 
-        def fake_run(cmd, **kwargs):
-            out_idx = cmd.index("-o") + 1
-            Path(cmd[out_idx]).write_bytes(b"\x89PNG")
-            return Mock(returncode=0)
+        def fake_run(args, **kwargs):
+            out_idx = args.index("-o") + 1
+            Path(args[out_idx]).write_bytes(b"\x89PNG")
+            return Mock(returncode=0, stdout="", stderr="")
 
-        with patch("backend.runner.preview.subprocess.run", side_effect=fake_run) as run_mock:
-            with patch("backend.runner.preview.shutil.which", return_value="/usr/bin/officecli"):
+        with patch("backend.runner.preview.run_officecli", side_effect=fake_run) as run_mock:
+            with patch("backend.runner.preview.officecli_available", return_value=True):
                 ok = generate_docx_previews(FIXTURE_ROOT, FIXTURE_DOCX)
             self.assertTrue(ok)
             cmd = run_mock.call_args[0][0]
@@ -146,6 +146,42 @@ class PreviewHtmlTests(unittest.TestCase):
             self.assertEqual(PREVIEW_SCREENSHOT_HEIGHT, 1188)
             self.assertEqual(run_mock.call_count, PREVIEW_COVER_PAGES)
             self.assertEqual(PREVIEW_COVER_PAGES, 1)
+
+    def test_generate_docx_previews_via_docker_fallback(self) -> None:
+        if not FIXTURE_DOCX.is_file():
+            self.skipTest("fixture docx missing")
+        cover = self.preview_dir / "page-1.png"
+        cover.unlink(missing_ok=True)
+
+        def fake_run(args, **kwargs):
+            out_idx = args.index("-o") + 1
+            Path(args[out_idx]).write_bytes(b"\x89PNG")
+            return Mock(returncode=0, stdout="", stderr="")
+
+        with patch("backend.runner.preview.run_officecli", side_effect=fake_run) as run_mock:
+            with patch("backend.runner.preview.officecli_available", return_value=True):
+                ok = generate_docx_previews(FIXTURE_ROOT, FIXTURE_DOCX)
+        self.assertTrue(ok)
+        self.assertTrue(cover.is_file())
+        self.assertEqual(run_mock.call_count, 1)
+
+    def test_generate_docx_outline_via_run_officecli(self) -> None:
+        if not FIXTURE_DOCX.is_file():
+            self.skipTest("fixture docx missing")
+        outline_path = self.preview_dir / DOCUMENT_OUTLINE_NAME
+        outline_path.unlink(missing_ok=True)
+        payload = '{"headings": [{"line": 1, "text": "H", "level": 1, "style": "Heading1"}]}'
+        with patch(
+            "backend.runner.preview.run_officecli",
+            return_value=Mock(returncode=0, stdout=payload, stderr=""),
+        ):
+            with patch("backend.runner.preview.officecli_available", return_value=True):
+                ok = generate_docx_outline(FIXTURE_ROOT, FIXTURE_DOCX)
+        self.assertTrue(ok)
+        self.assertTrue(outline_path.is_file())
+        headings = load_document_outline(FIXTURE_ROOT)
+        self.assertEqual(len(headings), 1)
+        self.assertEqual(headings[0]["style"], "Heading1")
 
     def test_filter_nav_headings_excludes_cover(self) -> None:
         headings = [

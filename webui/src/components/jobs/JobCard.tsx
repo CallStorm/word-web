@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useCallback, useState } from 'react'
 import type { Job } from '../../api/types'
 import { downloadUrl } from '../../api/client'
 import { StatusPill } from './StatusPill'
@@ -30,7 +31,10 @@ export function JobCard({
   const deleteJob = useDeleteJob()
   const retryJob = useRetryJob()
 
-  const previewOk = !!job.has_preview && isDone
+  const [previewFailed, setPreviewFailed] = useState(false)
+  const handlePreviewFailed = useCallback(() => setPreviewFailed(true), [])
+
+  const tryPreview = isDone && hasDocx && !previewFailed
 
   const stopBubble = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -89,12 +93,13 @@ export function JobCard({
     >
       <Link to={`/jobs/${job.id}`} className="block">
         <div className={DOCUMENT_COVER_CLASS}>
-          {previewOk ? (
+          {tryPreview ? (
             <AuthenticatedSlideImage
               url={`/api/jobs/${job.id}/preview`}
               alt={job.project_name || '封面预览'}
               className={DOCUMENT_PREVIEW_IMG_CLASS}
               loading="lazy"
+              onFailed={handlePreviewFailed}
             />
           ) : (
             <CoverPlaceholder status={job.status} id={job.id} hasDocx={hasDocx} />

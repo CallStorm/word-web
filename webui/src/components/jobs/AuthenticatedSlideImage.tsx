@@ -29,11 +29,13 @@ export function AuthenticatedSlideImage({
   alt,
   className = '',
   loading = 'lazy' as 'lazy' | 'eager',
+  onFailed,
 }: {
   url: string | null | undefined
   alt: string
   className?: string
   loading?: 'lazy' | 'eager'
+  onFailed?: () => void
 }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -57,14 +59,17 @@ export function AuthenticatedSlideImage({
         setBlobUrl(objectUrl)
       })
       .catch(() => {
-        if (active) setFailed(true)
+        if (active) {
+          setFailed(true)
+          onFailed?.()
+        }
       })
 
     return () => {
       active = false
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [url])
+  }, [url, onFailed])
 
   if (!url || failed) {
     return (

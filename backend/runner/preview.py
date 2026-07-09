@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from backend.runner.officecli_exec import officecli_available, run_officecli
+
 log = logging.getLogger("backend.runner.preview")
 
 MAX_PREVIEW_PAGES = 20
@@ -192,13 +194,13 @@ def generate_docx_html(
         except OSError:
             pass
 
-    if shutil.which("officecli") is None:
-        log.warning("officecli not found; skipping HTML preview for %s", docx)
+    if not officecli_available():
+        log.warning("officecli not available; skipping HTML preview for %s", docx)
         return html_path.is_file() and html_path.stat().st_size > 0
 
     preview_dir.mkdir(parents=True, exist_ok=True)
     try:
-        result = subprocess.run(
+        result = run_officecli(
             [
                 "officecli",
                 "view",
@@ -207,10 +209,7 @@ def generate_docx_html(
                 "-o",
                 str(html_path),
             ],
-            capture_output=True,
-            text=True,
             timeout=180,
-            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log.warning("HTML preview generation failed for %s: %s", docx, exc)
@@ -335,18 +334,15 @@ def generate_docx_outline(
         except OSError:
             pass
 
-    if shutil.which("officecli") is None:
-        log.warning("officecli not found; skipping outline for %s", docx)
+    if not officecli_available():
+        log.warning("officecli not available; skipping outline for %s", docx)
         return outline_path.is_file() and outline_path.stat().st_size > 0
 
     preview_dir.mkdir(parents=True, exist_ok=True)
     try:
-        result = subprocess.run(
+        result = run_officecli(
             ["officecli", "view", str(docx), "outline", "--json"],
-            capture_output=True,
-            text=True,
             timeout=60,
-            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log.warning("outline generation failed for %s: %s", docx, exc)
@@ -395,8 +391,8 @@ def generate_docx_previews(
         except OSError:
             pass
 
-    if shutil.which("officecli") is None:
-        log.warning("officecli not found; skipping preview generation for %s", docx)
+    if not officecli_available():
+        log.warning("officecli not available; skipping preview generation for %s", docx)
         return False
 
     preview_dir.mkdir(parents=True, exist_ok=True)
@@ -405,7 +401,7 @@ def generate_docx_previews(
     for page in range(1, max_pages + 1):
         out = preview_dir / f"page-{page}.png"
         try:
-            result = subprocess.run(
+            result = run_officecli(
                 [
                     "officecli",
                     "view",
@@ -422,10 +418,7 @@ def generate_docx_previews(
                     "-o",
                     str(out),
                 ],
-                capture_output=True,
-                text=True,
                 timeout=120,
-                check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             log.warning("preview generation failed on page %d for %s: %s", page, docx, exc)
